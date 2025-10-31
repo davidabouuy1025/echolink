@@ -1,0 +1,11 @@
+{
+    "chats": [
+        {
+            "chat_id": 1,
+            "sender": 1,
+            "receiver": 2,
+            "content": "hi"
+        }
+    ],
+    "next_chat_id": 2
+}

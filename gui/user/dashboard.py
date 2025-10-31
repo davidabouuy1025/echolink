@@ -11,6 +11,9 @@ def dashboard():
     if "uploaded_file" not in st.session_state:
         st.session_state.uploaded_file = None
 
+    if "uploader_key" not in st.session_state:
+        st.session_state.uploader_key = 0
+
     # --- Image ---
     img_path = "wallpaper/wallpaper.png"
     st.image(img_path)
@@ -47,12 +50,17 @@ def dashboard():
             st.header("Your Posts 📸🦋")
             post_button = st.button("Post", width=200)
         with col2:
-            st.session_state.uploaded_file = st.file_uploader("Upload Posts", type=["jpg", "jpeg", "png"])
+            st.session_state.uploaded_file = st.file_uploader(
+                "Upload Posts", 
+                type=["jpg", "jpeg", "png"], 
+                key=f"file_uploader_{st.session_state.uploader_key}"
+            )
 
         if post_button:
             if st.session_state.uploaded_file:
                 result = manager.add_post(user_id, st.session_state.uploaded_file)
                 st.session_state.uploaded_file = None
+                st.session_state.uploader_key += 1
                 st.rerun()
             else:
                 st.error("⚠️ You can't post without uploading anything")

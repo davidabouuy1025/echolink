@@ -1,5 +1,6 @@
 import streamlit as st
 import datetime
+import time
 from streamlit_autorefresh import st_autorefresh
 from gui.user.dashboard import dashboard
 from gui.user.chat import chat
@@ -7,16 +8,16 @@ from gui.user.friend import friend
 from gui.user.profile_page import profile
 from gui.user.show_json import show_json
 
+
 def user_page():
     # Variables
     manager = st.session_state.manager
     user_id = st.session_state.user_id
     current_user = next((u for u in manager.users if str(u.user_id) == str(user_id)), None)
-    # update_last_active()
-    # st_autorefresh(interval=1000, key="refresh-all")
-    # if current_user.last_active != datetime.datetime.now().strftime("%Y-%m-%d %H:%M"):
-    #     current_user.last_active = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    #     manager.save()
+    current_user.status = "online"
+    print(f'Set user @{user_id} to ONLINE')
+    current_user.last_active = datetime.datetime.now().strftime("%d/%m/%Y")
+    manager.save()
 
     if not current_user:
         st.warning("User data not loaded yet, Please refresh  or log in again")
@@ -57,7 +58,9 @@ def user_page():
     st.sidebar.write(f"@{current_user.username}")
     st.divider()
     menu = st.sidebar.radio("Menu", ["Dashboard", "Chats", "Friends",  "Profile"])
-    st.sidebar.button("Logout 🚪", on_click=logout, use_container_width=True)
+
+    # Page design
+    st.sidebar.button("Logout 🚪", on_click=logout, args=(manager, user_id), use_container_width=True)
 
     if menu == "Dashboard":
         dashboard()
@@ -67,35 +70,29 @@ def user_page():
         friend()
     elif menu == "Profile":
         profile()
+
+
+# def update_last_active():
+#     manager = st.session_state.manager
+#     username = st.session_state.username
+#     current_user = next((u for u in manager.users if u.username == username), None)
+#     st.info(current_user)
     
-    # for user in manager.users:
-    #     last_active = datetime.datetime.fromisoformat(user.last_active)
-    #     if (datetime.datetime.now() - last_active).seconds > 20:
-    #         user.status = "offline"
-    #     manager.save()
+#     if current_user:
+#         current_user.last_active = datetime.datetime.now().isoformat()
+#         manager.save()
 
-
-def update_last_active():
-    # Reload from disk to get the latest data
-    # manager = Manager.load_data()
-    # user_id = st.session_state.user_id
-    manager = st.session_state.manager
-    username = st.session_state.username
-    current_user = next((u for u in manager.users if u.username == username), None)
-    st.info(current_user)
-    
-    if current_user:
-        current_user.last_active = datetime.datetime.now().isoformat()
-        manager.save()
-
-    # Optional: update your in-session copy too
-    # st.session_state.manager = manager
-
-def logout():
-    st.session_state.status = "offline"
-    manager = st.session_state.manager
+def set_offline(manager, user_id):
+    current_user = next((u for u in manager.users if u.user_id == user_id), None)
+    current_user.status = "offline"
     manager.save()
+
+def logout(manager, user_id):
+    set_offline(manager, user_id)
+    time.sleep(0.5)
     st.session_state.page = "login"
     st.session_state.username = None
     st.session_state.user_id = ""
-    st.session_state.logout_triggered = True
+    # st.cache_data.clear()
+    # st.cache_resource.clear()
+    st.session_state.pop("logout_triggered", None)

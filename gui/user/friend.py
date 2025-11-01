@@ -63,6 +63,7 @@ def friend():
             # View recommended friends
             with st.container(border=True, width='stretch', height='stretch'):
                 st.header("Recommendation")
+                st.write("No suggested friends currently")
 
         st.divider()
 

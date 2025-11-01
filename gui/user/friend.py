@@ -1,5 +1,6 @@
 import streamlit as st
 import datetime
+import time
 from app.user import User
 from streamlit_autorefresh import st_autorefresh
 
@@ -11,6 +12,12 @@ def friend():
     
     tab = ["Add Friend", "View Request", "Edit Status"]
     tab1, tab2, tab3 = st.tabs(tab)
+
+    if "refresh_active" not in st.session_state:
+        st.session_state.refresh_active = True
+
+    if st.session_state.refresh_active:
+        st_autorefresh(interval=3000, key="auto_refresh_key")
 
     with tab1:
         # Get friend's username
@@ -44,7 +51,7 @@ def friend():
                     st.warning(f"You have already sent a request to @{add_friend_uname}")
                     return
                 elif check_status == "ok":
-                    result = manager.add_friend(current_user.user_id, add_friend_uname)
+                    result = manager.add_friend(current_user, add_friend_uname)
                     if result:
                         st.toast(f"Friend request sent to @{add_friend_uname} ✅")
 
@@ -59,7 +66,7 @@ def friend():
         # Change list of int to list of object
         req_list = current_user.friend_request
         req_object = User.id_to_object(manager, req_list)
-
+        # req_object [user_object, timestamp]
         if req_object:
             for index, req in enumerate(req_object):
                 sender = req[0]
@@ -80,7 +87,6 @@ def friend():
                 # Button actions (must be inside the loop!)
                 if accept_button:
                     manager.accept_request(current_user, sender)
-                    result = manager.add_chat(current_user, sender, datetime.datetime.now().isoformat())
                     st.session_state.success_msg = f"You are now friends with @{sender.username}"
                     st.rerun()
 
@@ -93,12 +99,9 @@ def friend():
         else:
             st.warning("No friend request 🤔")
 
-        st_autorefresh(5000, key="friend_request_autorefresh")
         manager.load_data()
             
     with tab3:
-        st_autorefresh(3000, key="friend_status_autorefresh")
-
         st.header("Your Friends 👥")
         st.write("")
 
@@ -114,47 +117,52 @@ def friend():
 
         if req_object:
             for index, friend in enumerate(req_object):
-                with st.form(key=f"dlt_{friend.user_id}"):
+                form_key = f"dlt_{friend.user_id}"
+                confirm_key = f"confirm_unfriend_{friend.user_id}"
+
+                with st.form(key=form_key):
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.markdown(f"<span style='font-size:200%'><b>Friend {index+1}</b></span>", unsafe_allow_html=True)
                     with col2:
-                        if friend.gender == "His 👦":
-                            gender_icon = "👦"
-                        elif friend.gender == "Her 👧":
-                            gender_icon = "👧"
-                        else:
-                            gender_icon = "❓"
-
+                        gender_icon = {"His 👦": "👦", "Her 👧": "👧"}.get(friend.gender, "❓")
                         st.markdown(f"<span style='font-size:170%'>#{friend.username} {gender_icon}</span>", unsafe_allow_html=True)
                     with col3:
-                        if friend.status == "online":
-                            status_icon = "🟢"
-                        else:
-                            status_icon = "🔴"
-
+                        status_icon = "🟢" if friend.status == "online" else "🔴"
                         st.markdown(f"<span style='font-size:170%'>{friend.status} {status_icon}</span>", unsafe_allow_html=True)
                     with col4:
                         unfriend_button = st.form_submit_button("Unfriend ❌", use_container_width=True)
 
-                    # ✅ Confirmation Prompt
-                    if unfriend_button:
-                        confirm = st.warning(
-                            f"Are you sure you want to unfriend {friend.username}? This will delete all chats.",
-                            icon="⚠️"
-                        )
-                        colA, colB = st.columns(2)
-                        with colA:
-                            yes = st.form_submit_button("Yes, unfriend", key=f"yes_{friend.user_id}")
-                        with colB:
-                            no = st.form_submit_button("Cancel", key=f"no_{friend.user_id}")
+                # ✅ If Unfriend clicked, set confirmation flag
+                if unfriend_button:
+                    st.session_state.refresh_active = False  # stop auto-refresh
+                    st.session_state[confirm_key] = True
 
-                        if yes:
-                            result = manager.unfriend(current_user, friend.user_id)
-                            st.success(f"You have unfriended {friend.username} and all chats were deleted.")
+                # ✅ Confirmation prompt outside the form
+                if st.session_state.get(confirm_key, False):
+                    st.warning(
+                        f"Are you sure you want to unfriend @{friend.username}? This will **delete all chats**.",
+                        icon="⚠️"
+                    )
+                    colA, colB = st.columns(2)
+                    with colA:
+                        yes = st.button("Yes, unfriend", key=f"yes_{friend.user_id}")
+                    with colB:
+                        no = st.button("Cancel", key=f"no_{friend.user_id}")
+
+                    if yes:
+                        with st.spinner("Processing...", show_time=True):
+                            time.sleep(1)
+                            manager.unfriend(current_user, friend.user_id)
+                            st.success(f"You have unfriended @{friend.username} and all chats were deleted.")
+                            st.session_state[confirm_key] = False
+                            st.session_state.refresh_active = True
                             st.rerun()
-                        elif no:
-                            st.info("Cancelled. No changes made.")
+                    elif no:
+                        st.session_state[confirm_key] = False
+                        st.session_state.refresh_active = True
+                        st.session_state.success_msg = "Cancelled. No changes made."
+                        st.rerun()
         else:
             st.warning("No friends found 🥹")
             

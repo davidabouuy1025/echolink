@@ -1,8 +1,8 @@
 import streamlit as st
 import datetime
 import time
-from streamlit_autorefresh import st_autorefresh
 from gui.user.dashboard import dashboard
+from gui.user.moods import moods
 from gui.user.chat import chat
 from gui.user.friend import friend
 from gui.user.profile_page import profile
@@ -16,7 +16,7 @@ def user_page():
     current_user = next((u for u in manager.users if str(u.user_id) == str(user_id)), None)
     current_user.status = "online"
     print(f'Set user @{user_id} to ONLINE')
-    current_user.last_active = datetime.datetime.now().strftime("%d/%m/%Y")
+    # current_user.last_active = datetime.datetime.now().strftime("%d/%m/%Y")
     manager.save()
 
     if not current_user:
@@ -57,13 +57,15 @@ def user_page():
     st.sidebar.markdown("# :rainbow[EchoLink]", unsafe_allow_html=True)
     st.sidebar.write(f"@{current_user.username}")
     st.divider()
-    menu = st.sidebar.radio("Menu", ["Dashboard", "Chats", "Friends",  "Profile"])
+    menu = st.sidebar.radio("Menu", ["Dashboard", "Moods", "Chats", "Friends",  "Profile"])
 
     # Page design
     st.sidebar.button("Logout 🚪", on_click=logout, args=(manager, user_id), use_container_width=True)
 
     if menu == "Dashboard":
         dashboard()
+    elif menu == "Moods":
+        moods()
     elif menu == "Chats":
         chat()
     elif menu == "Friends":
@@ -84,6 +86,8 @@ def user_page():
 
 def set_offline(manager, user_id):
     current_user = next((u for u in manager.users if u.user_id == user_id), None)
+    print(current_user)
+    print(current_user.user_id)
     current_user.status = "offline"
     manager.save()
 

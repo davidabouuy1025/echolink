@@ -180,8 +180,8 @@ class Manager():
         new_req = []
         current_dt = datetime.datetime.now().strftime("%d/%m/%Y")
         friend = next((f for f in self.users if f.username == friend_uname), None)
-        new_req.append(user_id)
         new_req.append(current_dt)
+        new_req.append(user_id)
         friend.friend_request.append(new_req)
         self.save_data()
         return True
@@ -191,10 +191,9 @@ class Manager():
         current_dt = datetime.datetime.now().strftime("%d/%m/%Y")
         current_user.friends.append([current_dt, sender.user_id])
         sender.friends.append([current_dt, current_user.user_id])
-
         # Remove request
-        current_user.friend_request = [req for req in current_user.friend_request if req[0] != sender.user_id]
-
+        current_user.friend_request = [req for req in current_user.friend_request if req[1] != sender.user_id]
+        # Save data
         self.save_data()
 
     def get_chat_history(self, user_id, friend_id):
@@ -204,19 +203,19 @@ class Manager():
 
     def unfriend(self, current_user, target_user_id):
         # Remove friend from both sides
-        if target_user_id in current_user.friends:
-            current_user.friends.remove(target_user_id)
+        current_user.friends = [friend for friend in current_user.friends if str(friend[1]) != str(target_user_id)]
 
         target_user = next((u for u in self.users if u.user_id == target_user_id), None)
-        if target_user and current_user.user_id in target_user.friends:
-            target_user.friends.remove(current_user.user_id)
+        print(target_user)
+        if target_user:
+            target_user.friends = [friend for friend in target_user.friends if friend[1] != current_user.user_id]
 
         # Delete all chat messages between both
         chats_to_delete = []
-        for chat in self.chats:  # assuming self.chats is a list of chat objects or dicts
+        for chat in self.chat:  # assuming self.chats is a list of chat objects or dicts
             if (
-                (chat["sender_id"] == current_user.user_id and chat["receiver_id"] == target_user_id)
-                or (chat["sender_id"] == target_user_id and chat["receiver_id"] == current_user.user_id)
+                (chat.sender == current_user.user_id and chat.receiver == target_user_id)
+                or (chat.sender_id == target_user_id and chat.receiver_id == current_user.user_id)
             ):
                 chats_to_delete.append(chat)
 
@@ -225,7 +224,6 @@ class Manager():
             
         # Save changes
         self.save_data()
-
         return True
     
     def add_post(self, user_id, post_path):

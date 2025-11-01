@@ -86,7 +86,7 @@ class User:
 
         # Rule 3: Check if a request already exists (pending)
         for req in receiver.friend_request:
-            if req[0] == sender_id:
+            if req[1] == sender_id:
                 return "already_sent"
 
         return "ok"  # All clear
@@ -94,7 +94,7 @@ class User:
     @staticmethod
     def id_to_object(manager, req_list):
         result = []
-        for sender_id, timestamp in req_list:
+        for timestamp, sender_id in req_list:
             sender_user = next((u for u in manager.users if u.user_id == sender_id), None)
             if sender_user:
                 result.append([sender_user, timestamp])

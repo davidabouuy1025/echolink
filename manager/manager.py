@@ -1,19 +1,24 @@
 import os
-import json
+import json 
+import calendar as cal
 import datetime
+import pandas as pd
 from PIL import Image
 from app.user import User
 from app.chat import Chat
 from app.post import Post
+from app.mood import Mood
 
 class Manager():
-    def __init__(self, user_path = "data/user.json", chat_path="data/chat.json", post_path="data/post.json"):
+    def __init__(self, user_path = "data/user.json", chat_path="data/chat.json", post_path="data/post.json", mood_path="data/mood.json"):
         self.users = []
         self.chats = []
         self.posts = []
+        self.moods = []
         self.users_path = user_path
         self.chat_path = chat_path
         self.post_path = post_path
+        self.mood_path = mood_path
         self.next_user_id = 1
         self.next_chat_id = 1 
         self.next_post_id = 1
@@ -58,6 +63,17 @@ class Manager():
 
         self.next_post_id = post_data.get("next_path_id", 1)
 
+        try:
+            with open(self.mood_path, 'r') as f:
+                mood_data = json.load(f)
+        except:
+            mood_data = {}
+
+        self.moods = [
+            Mood(m["user_id"], m["moods"])
+            for m in mood_data.get("moods", [])
+        ]
+
     def save_data(self):
         # Save user data
         os.makedirs(os.path.dirname(self.users_path), exist_ok=True)
@@ -100,6 +116,20 @@ class Manager():
         try:
             with open(self.post_path, "w") as f:
                 json.dump(post_data_to_save, f, indent=4)
+        except OSError:
+            print("[System] Error saving post data")
+            raise
+
+        # Save mood data
+        os.makedirs(os.path.dirname(self.mood_path), exist_ok=True)
+
+        mood_data_to_save = {
+            "moods": [m.__dict__ for m in self.moods],
+        }
+
+        try:
+            with open(self.mood_path, "w") as f:
+                json.dump(mood_data_to_save, f, indent=4)
         except OSError:
             print("[System] Error saving post data")
             raise
@@ -255,7 +285,107 @@ class Manager():
     def get_post(self, user_id):
         return [path.image_path for path in self.posts if path.user_id == user_id]
     
-    def new_function():
-        pass
+    def get_user_moods(self, user_id):
+        mood_obj = next((m for m in self.moods if str(m.user_id) == str(user_id)), None)
+        if mood_obj is None:
+            mood_obj = Mood(user_id, [])
+            self.moods.append(mood_obj)
+            self.save_data()
+        return mood_obj
+    
+    def set_daily_mood(self, user_id, mood):
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
 
+        mood_obj = next((m for m in self.moods if str(m.user_id) == str(user_id)), None)
+        if mood_obj is None:
+            mood_obj = Mood(user_id, [])
+            self.moods.append(mood_obj)
 
+        today_entry = next((m for m in mood_obj.moods if m['date'] == today), None)
+        if today_entry:
+            today_entry['mood'] = mood
+        else:
+            mood_obj.moods.append({
+                "date": today,
+                "mood": mood
+            })
+
+        self.save_data()
+        return True
+
+    def get_last_n_days_moods(self, user_id, n=5):
+        # Get user mood object
+        moods = self.get_user_moods(user_id)
+        all_moods = moods.__dict__.get("moods", [])
+
+        # Sort
+        moods_sorted = sorted(
+            all_moods,
+            key=lambda x: datetime.datetime.strptime(x["date"], "%Y-%m-%d"),
+            reverse=True
+        )
+
+        # Take last 5
+        latest_n = moods_sorted[:n]
+
+        today = datetime.datetime.now().date()
+        dates_needed = [
+            (today - datetime.timedelta(days=i)).
+            strftime("%Y-%m-%d") 
+            for i in range(n)
+        ]
+
+        mood_dict = {m["date"]: m["mood"] for m in latest_n}
+
+        result = []
+        for date in sorted(dates_needed, reverse=True):
+            result.append({
+                "date": date,
+                "mood": mood_dict.get(date, None)
+            })
+
+        return result
+
+    def get_monthly_moods_df(self, user_id):
+        moods_obj = self.get_user_moods(user_id)
+
+        if hasattr(moods_obj, "__dict__"):
+            moods = moods_obj.__dict__.get("moods", [])
+        elif isinstance(moods_obj, dict):
+            moods = moods_obj.get("moods", [])
+        elif isinstance(moods_obj, list):
+            moods = moods_obj
+        else:
+            moods = []
+
+        today = datetime.date.today()
+        year = today.year
+        month = today.month
+
+        mood_emojis1 = {
+            "happy": "😊",
+            "sad": "😢",
+            "angry": "😡",
+            "neutral": "😐",
+            "excited": "🤩",
+            "tired": "😴"
+        }
+
+        # ✅ Use the actual `calendar` module
+        num_days = cal.monthrange(year, month)[1]
+        all_dates = [datetime.date(year, month, d) for d in range(1, num_days + 1)]
+        df = pd.DataFrame({"date": all_dates})
+
+        mood_df = pd.DataFrame(moods) if moods else pd.DataFrame(columns=["date", "mood"])
+
+        if not mood_df.empty and "date" in mood_df:
+            mood_df["date"] = pd.to_datetime(mood_df["date"]).dt.date
+
+        # Merge mood data into the monthly frame
+        df = df.merge(mood_df, on="date", how="left").fillna({"mood": "unknown"})
+
+        # ✅ Convert mood strings to emojis
+        df["mood"] = df["mood"].map(mood_emojis1).fillna("❓")
+
+        return df
+        

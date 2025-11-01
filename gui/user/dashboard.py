@@ -52,7 +52,7 @@ def dashboard():
             with col1:
                 with st.container(border=True, height='stretch'):
                     st.subheader("Remark 💬")
-                    remark = st.text_area(label="", placeholder="Anything you wanna share?", label_visibility='hidden')
+                    remark = st.text_area(label="Remark", placeholder="Anything you wanna share?", value=current_user.remark, label_visibility='hidden')
                     if st.button("Save"):
                         manager.add_remark(user_id, remark)
 

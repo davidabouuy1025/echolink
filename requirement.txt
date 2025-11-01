@@ -1,0 +1,10 @@
+python
+
+streamlit
+streamlit-chatbox
+streamlit-autorefresh
+
+pandas
+
+
+google-generativeai

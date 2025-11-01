@@ -10,7 +10,8 @@
             "contact_num": "0123456789",
             "profile_pic": "",
             "status": "online",
-            "last_active": "2025-10-29 19:46",
+            "last_active": "01/11/2025",
+            "remark": "",
             "chat_ids": [
                 1
             ],
@@ -18,14 +19,13 @@
                 [
                     "29/10/2025",
                     2
+                ],
+                [
+                    "01/11/2025",
+                    3
                 ]
             ],
-            "friend_request": [
-                [
-                    3,
-                    "29/10/2025"
-                ]
-            ]
+            "friend_request": []
         },
         {
             "user_id": 2,
@@ -36,8 +36,9 @@
             "bday": "",
             "contact_num": "",
             "profile_pic": "",
-            "status": "online",
-            "last_active": "2025-10-29 19:47",
+            "status": "offline",
+            "last_active": "01/11/2025",
+            "remark": "",
             "chat_ids": [
                 1
             ],
@@ -58,10 +59,16 @@
             "bday": "",
             "contact_num": "",
             "profile_pic": "",
-            "status": "online",
-            "last_active": "2025-10-29 20:01",
+            "status": "offline",
+            "last_active": "01/11/2025",
+            "remark": "",
             "chat_ids": [],
-            "friends": [],
+            "friends": [
+                [
+                    "01/11/2025",
+                    1
+                ]
+            ],
             "friend_request": []
         }
     ],

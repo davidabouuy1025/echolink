@@ -1,4 +1,5 @@
 import streamlit as st
+import datetime
 from PIL import Image
 
 def dashboard():
@@ -41,6 +42,55 @@ def dashboard():
             else:
                 st.image("https://cdn-icons-png.flaticon.com/512/3177/3177440.png", width=100, caption="Default Avatar")
 
+    st.divider()
+
+    with st.container(border=True):
+            st.header("Shortcut 🖇️")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                with st.container(border=True, height='stretch'):
+                    st.subheader("Remark 💬")
+                    remark = st.text_area(label="", placeholder="Anything you wanna share?", label_visibility='hidden')
+                    if st.button("Save"):
+                        manager.add_remark(user_id, remark)
+
+            with col2:
+                today = datetime.datetime.now().strftime("%Y-%m-%d")
+                user_moods = manager.get_user_moods(user_id)
+
+                today_entry = next((m for m in user_moods.moods if m['date'] == today), None)
+
+                mood_options = ["happy", "sad", "angry", "neutral", "excited", "tired"]
+
+                mood_emojis = {
+                    "happy": "Happy 😊",
+                    "sad": "Sad 😢",
+                    "angry": "Angry 😡",
+                    "neutral": "Neutral 😐",
+                    "excited": "Excited 🤩",
+                    "tired": "Tired 😴"
+                }
+                if today_entry:
+                    default_mood = mood_emojis[today_entry['mood']]
+                    default_index = list(mood_emojis.values()).index(default_mood)
+                else:
+                    default_index = 3  # Neutral 😐
+
+                with st.container(border=True, height='stretch'):
+                    st.subheader("Today Mood 🤩")
+                    mood_selected = st.selectbox(
+                        "Today's Mood:",
+                        options=list(mood_emojis.values()),
+                        index=default_index
+                    )
+
+                    if st.button("Save Mood"):
+                        mood_key = [k for k, v in mood_emojis.items() if v == mood_selected][0]
+                        manager.set_daily_mood(user_id, mood_key)
+                        st.session_state.update_mood_msg = f"Mood for {today} saved as {mood_selected}!"
+            
     st.divider()
 
     # --- Personal Posts ---
@@ -86,3 +136,4 @@ def dashboard():
                 # Determine which column to put this image in
                 col = cols[idx % num_cols]
                 col.image(img, width=300)
+

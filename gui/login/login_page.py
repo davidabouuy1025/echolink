@@ -21,7 +21,7 @@ def login_page():
     if st.session_state.page == "login":
         st.title("EchoLink 🔎🔊")
         st.sidebar.title("EchoLink Navigation")
-        menu = st.sidebar.radio("Select", ["Login", "Register"])
+        menu = st.sidebar.radio("Select", ["Login", "Register", "README"])
 
         if menu == "Login":
             from gui.login.login import login
@@ -29,6 +29,10 @@ def login_page():
         elif menu == "Register":
             from gui.login.register import register
             register()
+
+        elif menu == "README":
+            from gui.login.readme import readme
+            readme()
 
     elif st.session_state.page == "user":
         from gui.user.user_page import user_page

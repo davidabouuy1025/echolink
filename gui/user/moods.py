@@ -47,7 +47,7 @@ def moods():
         col1, col2 = st.columns(2)
         with col1:
             with st.container(border=True, height='stretch'):
-                st.header("Last 5 Days Mood 🗓️")
+                st.header("Last 5 Days 🗓️")
                 last_5 = manager.get_last_n_days_moods(user_id)
                 # st.info(last_5)
                 if not last_5:
@@ -93,47 +93,30 @@ def moods():
         events = []
         for _, row in df.iterrows():
             mood = row["mood"]
-            color = (
-                "#ffffff"
-            )
             events.append({
                 "title": row["mood"],
                 "start": row["date"].isoformat(),
-                "end": row["date"].isoformat(),
-                "backgroundColor": color,
-                "font_size": '200%'
-
+                "end": row["date"].isoformat()
             })
         display_mood_calendar(events)
 
 def display_mood_calendar(events):
-    # Inject CSS: white background, no borders, large emojis
-    st.markdown("""
-        <style>
-        /* Make every calendar cell white */
-        .fc-daygrid-day-frame {
-            background-color: white;
-        }
+    options = {
+        "initialView": "dayGridMonth",
+        "eventDisplay": "block",
+        "height": "700px",
+        "eventTextColor": "black",
+        "eventBackgroundColor": "transparent"
+    }
 
-        /* Remove event background color */
-        .fc-event {
-            background-color: transparent !important;
-            border: none !important;
-        }
-
-        /* Make emojis large and centered */
+    custom_css = """
         .fc-event-title {
             font-size: 2rem !important;
             text-align: center !important;
-            line-height: 2.2rem !important;
         }
+        # .fc-daygrid-day {
+        #     border: 0px solid #eee !important;
+        # }
+    """
 
-        /* Optional: subtle border for structure */
-        .fc-daygrid-day {
-            border: 1px solid #eee !important;
-        }
-        </style>
-    """, 
-    unsafe_allow_html=True)
-
-    calendar(events)
+    calendar(events=events, options=options, custom_css=custom_css)

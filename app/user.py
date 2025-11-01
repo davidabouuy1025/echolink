@@ -1,5 +1,5 @@
 class User:
-    def __init__(self, user_id, username, password, name, gender, bday, contact_num, profile_pic, status, last_active, chat_ids, friends, friend_request):
+    def __init__(self, user_id, username, password, name, gender, bday, contact_num, profile_pic, status, last_active, remark, chat_ids, friends, friend_request):
         self.user_id = user_id
         self.username = username
         self.password = password
@@ -10,12 +10,13 @@ class User:
         self.profile_pic = profile_pic
         self.status = status
         self.last_active = last_active
+        self.remark = remark
         self.chat_ids = chat_ids or []
         self.friends = friends or []
         self.friend_request = friend_request or []
     
     def create_user_object(user_id, username, password, current_dt, chat_ids, friends, friend_request):
-        return User(user_id, username, password, "", "", "", "", "", "online", current_dt, chat_ids, friends, friend_request)
+        return User(user_id, username, password, "", "", "", "", "", "online", current_dt, "", chat_ids, friends, friend_request)
     
     def username_validation(username):
         from manager.manager import Manager
@@ -103,10 +104,16 @@ class User:
     @staticmethod
     def id_to_object_friends(manager, req_list):
         result = []
-        for user in req_list:
-            sender_user = next((u for u in manager.users if u.user_id == user), None)
-            if sender_user:
-                result.append(sender_user)
+        for item in req_list:
+            if isinstance(item, (list, tuple)) and len(item) == 2:
+                date, user_id = item
+            else:
+                user_id = item
+                date = None
+
+            user_obj = next((u for u in manager.users if u.user_id == user_id), None)
+            if user_obj:
+                result.append([user_obj, date])
         return result
 
     @staticmethod

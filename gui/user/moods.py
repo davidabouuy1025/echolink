@@ -123,6 +123,7 @@ def moods():
 
         # --- Monthly Mood View ---
         with st.container():
+            
             df = manager.get_monthly_moods_df(user_id)
             # st.info(df)
             events = []

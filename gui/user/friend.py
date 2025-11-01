@@ -20,44 +20,107 @@ def friend():
         st_autorefresh(interval=3000, key="auto_refresh_key")
 
     with tab1:
-        # Get friend's username
-        with st.container():
-            st.header("Add Friends 🥰")
-            st.write("")
-            add_friend_uname = st.text_input("Enter friend's username")
-            add_button = st.button("Send Request")
+        col1, col2 = st.columns(2)
 
-            if add_button:
-                check_exist = User.check_username(manager, add_friend_uname)
-                
-                if not check_exist:
-                    st.warning(f"@{add_friend_uname} not found!")
-                    return
+        with col1:
+            # Get friend's username
+            with st.container(border=True):
+                st.header("Add Friends 🥰")
+                st.write("")
+                add_friend_uname = st.text_input("Enter friend's username")
+                st.write("")
+                add_button = st.button("Send Request")
 
-                friend_id = User.check_username(manager, add_friend_uname)
+                if add_button:
+                    check_exist = User.check_username(manager, add_friend_uname)
+                    
+                    if not check_exist:
+                        st.warning(f"@{add_friend_uname} not found!")
+                        return
 
-                check_status = User.check_req(manager, current_user.user_id, add_friend_uname)
+                    friend_id = User.check_username(manager, add_friend_uname)
 
-                if check_status == "not_found":
-                    st.warning(f"@{add_friend_uname} not found!")
-                    return
-                elif check_status == "self_request":
-                    st.warning("You cannot send a friend request to yourself 🤨")
-                    return
-                elif check_status == "already_friends":
-                    st.info(f"You are already friends with @{add_friend_uname}")
-                    return
-                elif check_status == "already_sent":
-                    st.warning(f"You have already sent a request to @{add_friend_uname}")
-                    return
-                elif check_status == "ok":
-                    result = manager.add_friend(current_user, add_friend_uname)
-                    if result:
-                        st.toast(f"Friend request sent to @{add_friend_uname} ✅")
+                    check_status = User.check_req(manager, current_user.user_id, add_friend_uname)
 
-        # View recommended friends
-        with st.container():
-            pass
+                    if check_status == "not_found":
+                        st.warning(f"@{add_friend_uname} not found!")
+                        return
+                    elif check_status == "self_request":
+                        st.warning("You cannot send a friend request to yourself 🤨")
+                        return
+                    elif check_status == "already_friends":
+                        st.info(f"You are already friends with @{add_friend_uname}")
+                        return
+                    elif check_status == "already_sent":
+                        st.warning(f"You have already sent a request to @{add_friend_uname}")
+                        return
+                    elif check_status == "ok":
+                        result = manager.add_friend(current_user, add_friend_uname)
+                        if result:
+                            st.toast(f"Friend request sent to @{add_friend_uname} ✅")
+
+        with col2:
+            # View recommended friends
+            with st.container(border=True, width='stretch', height='stretch'):
+                st.header("Recommendation")
+
+        st.divider()
+
+        with st.container(border=True):
+            st.header("Find You Friend 😛")
+
+            all_friends = User.id_to_object_friends(manager, current_user.friends)
+            username_list = [friend.username for friend, dt in all_friends]
+            if not username_list:
+                st.error("No friends found ☹️")
+                st.stop()
+            choose_username = st.selectbox("Select friend", username_list)
+            
+            if st.button("Load Profile 🤩"):
+                st.session_state.refresh_active = False
+
+                friend_obj = next((u for u in manager.users if u.username == choose_username), None)
+                if friend_obj:
+                    st.divider()
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        with st.container(border=True):
+                            # Profile Picture
+                            if friend_obj.profile_pic:
+                                st.image(friend_obj.profile_pic, width=200)
+                            else:
+                                st.image("https://cdn-icons-png.flaticon.com/512/3177/3177440.png", width=100, caption="Default Avatar")
+
+                            # User Info
+                            st.markdown(f"## @{friend_obj.username}")
+                            st.markdown(f"**Name:** {friend_obj.name}")
+                            st.markdown(f"**Gender:** {friend_obj.gender}")
+                            st.markdown(f"**Birthday:** {friend_obj.bday}")
+                            st.markdown(f"**Status:** {friend_obj.status}")
+
+                    with col2:
+                        with st.container(border=True):
+                            # Display User's Posts
+                            st.subheader(f"@{friend_obj.username}'s Posts 🖼️")
+                            # Filter posts by user_id
+                            user_posts = [post for post in manager.posts if post.user_id == friend_obj.user_id]
+
+                            if user_posts:
+                                for post in user_posts:
+                                    st.markdown(f"**Posted on:** {post.datetime}")
+                                    if post.image_path:
+                                        for img in post.image_path:  # assuming image_path is a list of strings
+                                            st.image(img, width=300)
+                                    else:
+                                        st.info("No images in this post.")
+                                    st.divider()
+                            else:
+                                st.info("No posts yet 🥹")
+                else:
+                    st.error("Friend not found ❌")
+
 
     with tab2:
         # View Friend Request
@@ -117,19 +180,22 @@ def friend():
 
         if req_object:
             for index, friend in enumerate(req_object):
-                form_key = f"dlt_{friend.user_id}"
-                confirm_key = f"confirm_unfriend_{friend.user_id}"
+                user_obj = friend[0]
+                date = friend[1] 
+
+                form_key = f"dlt_{user_obj.user_id}"
+                confirm_key = f"confirm_unfriend_{user_obj.user_id}"
 
                 with st.form(key=form_key):
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.markdown(f"<span style='font-size:200%'><b>Friend {index+1}</b></span>", unsafe_allow_html=True)
                     with col2:
-                        gender_icon = {"His 👦": "👦", "Her 👧": "👧"}.get(friend.gender, "❓")
-                        st.markdown(f"<span style='font-size:170%'>#{friend.username} {gender_icon}</span>", unsafe_allow_html=True)
+                        gender_icon = {"His 👦": "👦", "Her 👧": "👧"}.get(user_obj.gender, "❓")
+                        st.markdown(f"<span style='font-size:170%'>#{user_obj.username} {gender_icon}</span>", unsafe_allow_html=True)
                     with col3:
-                        status_icon = "🟢" if friend.status == "online" else "🔴"
-                        st.markdown(f"<span style='font-size:170%'>{friend.status} {status_icon}</span>", unsafe_allow_html=True)
+                        status_icon = "🟢" if user_obj.status == "online" else "🔴"
+                        st.markdown(f"<span style='font-size:170%'>{user_obj.status} {status_icon}</span>", unsafe_allow_html=True)
                     with col4:
                         unfriend_button = st.form_submit_button("Unfriend ❌", use_container_width=True)
 

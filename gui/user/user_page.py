@@ -1,15 +1,14 @@
-import streamlit as st
-import datetime
-import time
-from gui.user.dashboard import dashboard
-from gui.user.moods import moods
-from gui.user.chat import chat
-from gui.user.friend import friend
-from gui.user.profile_page import profile
-from gui.user.show_json import show_json
-
-
 def user_page():
+    import streamlit as st
+    import datetime
+    import time
+    from gui.user.dashboard import dashboard
+    from gui.user.moods import moods
+    from gui.user.chat import chat
+    from gui.user.friend import friend
+    from gui.user.profile_page import profile
+    from gui.user.show_json import show_json
+    
     # Variables
     manager = st.session_state.manager
     user_id = st.session_state.user_id

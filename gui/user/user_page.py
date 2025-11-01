@@ -91,6 +91,8 @@ def set_offline(manager, user_id):
     manager.save()
 
 def logout(manager, user_id):
+    import time 
+    
     set_offline(manager, user_id)
     time.sleep(0.5)
     st.session_state.page = "login"

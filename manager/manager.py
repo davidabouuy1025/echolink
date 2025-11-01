@@ -313,7 +313,7 @@ class Manager():
         self.save_data()
         return True
 
-    def get_last_n_days_moods(self, user_id, n=5):
+    def get_last_n_days_moods(self, user_id, n):
         # Get user mood object
         moods = self.get_user_moods(user_id)
         all_moods = moods.__dict__.get("moods", [])

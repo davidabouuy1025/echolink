@@ -7,6 +7,7 @@ def apply_custom_css(css_file):
     st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 def main():
+    st.set_page_config(layout='wide', page_title='EchoLink')
     apply_custom_css("css/style.css")
     login_page()
 

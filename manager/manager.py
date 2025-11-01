@@ -32,7 +32,7 @@ class Manager():
             user_data = {}
         
         self.users = [
-            User(u["user_id"], u["username"], u["password"], u["name"], u["gender"], u["bday"], u["contact_num"], u["profile_pic"], u["status"], u["last_active"], u["chat_ids"], u["friends"], u["friend_request"]) 
+            User(u["user_id"], u["username"], u["password"], u["name"], u["gender"], u["bday"], u["contact_num"], u["profile_pic"], u["status"], u["last_active"], u["remark"], u["chat_ids"], u["friends"], u["friend_request"]) 
             for u in user_data.get("users", [])
         ]
 
@@ -389,3 +389,8 @@ class Manager():
 
         return df
         
+    def add_remark(self, user_id, remark):
+        current_user = next((u for u in self.users if str(u.user_id) == str(user_id)))
+        current_user.remark = remark
+        self.save_data()
+

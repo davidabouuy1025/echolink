@@ -92,7 +92,8 @@ def set_offline(manager, user_id):
 
 def logout(manager, user_id):
     import time 
-    
+    import streamlit as st
+
     set_offline(manager, user_id)
     time.sleep(0.5)
     st.session_state.page = "login"

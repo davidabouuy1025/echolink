@@ -54,7 +54,6 @@ simplejson==3.20.2
 six==1.17.0
 smmap==5.0.2
 tenacity==9.1.2
-time
 toml==0.10.2
 tornado==6.5.2
 tqdm==4.67.1

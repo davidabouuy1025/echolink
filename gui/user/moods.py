@@ -5,6 +5,15 @@ import calendar
 from streamlit_calendar import calendar
 from gui.user.chatbox import chatbox
 
+import subprocess
+import sys
+
+try:
+    from streamlit_calendar import calendar
+except ModuleNotFoundError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-calendar==1.3.1"])
+    from streamlit_calendar import calendar
+
 def display_mood_calendar(events):
     options = {
         "initialView": "dayGridMonth",

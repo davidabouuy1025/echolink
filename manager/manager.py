@@ -4,6 +4,7 @@ import calendar as cal
 import datetime
 import pandas as pd
 from PIL import Image
+from filelock import FileLock
 from app.user import User
 from app.chat import Chat
 from app.post import Post
@@ -26,19 +27,36 @@ class Manager():
 
     def load_data(self):
         try:
-            with open(self.users_path, 'r') as f:
-                user_data = json.load(f)
+            with FileLock(self.users_path + ".lock"):
+                with open(self.users_path, "r") as f:
+                    user_data = json.load(f)
         except:
             user_data = {}
         
         self.users = [
-            User(u["user_id"], u["username"], u["password"], u["name"], u["gender"], u["bday"], u["contact_num"], u["profile_pic"], u["status"], u["last_active"], u["remark"], u["chat_ids"], u["friends"], u["friend_request"]) 
+            User(
+                u["user_id"], 
+                u["username"], 
+                u["password"], 
+                u["name"], 
+                u["gender"], 
+                u["bday"], 
+                u["contact_num"], 
+                u["profile_pic"], 
+                u["status"], 
+                u["last_active"], 
+                u["remark"], 
+                u["chat_ids"], 
+                u["friends"], 
+                u["friend_request"]
+                ) 
             for u in user_data.get("users", [])
         ]
 
         try:
-            with open(self.chat_path, 'r') as f:
-                chat_data = json.load(f)
+            with FileLock(self.chat_path + ".lock"):
+                with open(self.chat_path, 'r') as f:
+                    chat_data = json.load(f)
         except:
             chat_data = {}
 
@@ -51,8 +69,9 @@ class Manager():
         self.next_chat_id = chat_data.get("next_chat_id", 1)
 
         try:
-            with open(self.post_path, 'r') as f:
-                post_data = json.load(f)
+            with FileLock(self.post_path, ".lock"):
+                with open(self.post_path, 'r') as f:
+                    post_data = json.load(f)
         except:
             post_data = {}
 
@@ -64,8 +83,9 @@ class Manager():
         self.next_post_id = post_data.get("next_path_id", 1)
 
         try:
-            with open(self.mood_path, 'r') as f:
-                mood_data = json.load(f)
+            with FileLock(self.mood_path, ".lock"):
+                with open(self.mood_path, 'r') as f:
+                    mood_data = json.load(f)
         except:
             mood_data = {}
 
@@ -84,8 +104,9 @@ class Manager():
         }
 
         try:
-            with open(self.users_path, "w") as f:
-                json.dump(user_data_to_save, f, indent=4)
+            with FileLock(self.users_path + ".lock"):
+                with open(self.users_path, "w") as f:
+                    json.dump(user_data_to_save, f, indent=4)
         except OSError as e:
             print("[System] Error saving user data")
             raise
@@ -99,8 +120,9 @@ class Manager():
         }
 
         try:
-            with open(self.chat_path, "w") as f:
-                json.dump(chat_data_to_save, f, indent=4)
+            with FileLock(self.chat_path + ".lock"):
+                with open(self.chat_path, "w") as f:
+                    json.dump(chat_data_to_save, f, indent=4)
         except OSError:
             print("[System] Error saving chat data")
             raise
@@ -114,8 +136,9 @@ class Manager():
         }
 
         try:
-            with open(self.post_path, "w") as f:
-                json.dump(post_data_to_save, f, indent=4)
+            with FileLock(self.post_path + ".lock"):
+                with open(self.post_path, "w") as f:
+                    json.dump(post_data_to_save, f, indent=4)
         except OSError:
             print("[System] Error saving post data")
             raise
@@ -128,8 +151,9 @@ class Manager():
         }
 
         try:
-            with open(self.mood_path, "w") as f:
-                json.dump(mood_data_to_save, f, indent=4)
+            with FileLock(self.mood_path + ".lock"):
+                with open(self.mood_path, "w") as f:
+                    json.dump(mood_data_to_save, f, indent=4)
         except OSError:
             print("[System] Error saving post data")
             raise
@@ -206,12 +230,12 @@ class Manager():
             return "sent"
         return "Unexpected error"
     
-    def add_friend(self, user_id, friend_uname):
+    def add_friend(self, current_user, friend_uname):
         new_req = []
         current_dt = datetime.datetime.now().strftime("%d/%m/%Y")
         friend = next((f for f in self.users if f.username == friend_uname), None)
         new_req.append(current_dt)
-        new_req.append(user_id)
+        new_req.append(current_user.user_id)
         friend.friend_request.append(new_req)
         self.save_data()
         return True
@@ -391,6 +415,11 @@ class Manager():
         
     def add_remark(self, user_id, remark):
         current_user = next((u for u in self.users if str(u.user_id) == str(user_id)))
+        # print(current_user)
+        # print(current_user.username)
+        # print(remark)
         current_user.remark = remark
+        # print(current_user.remark)
         self.save_data()
+
 

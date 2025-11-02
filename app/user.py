@@ -73,6 +73,12 @@ class UserManager:
     def validate_username(self, username):
         self.cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
         return self.cursor.fetchone() is not None
+    
+    def validate_password(password: str):
+        if len(password) < 6:
+            return "Password must be at least 6 characters"
+        # Add more rules here if needed
+        return None
 
     def login_user(self, username, password):
         self.cursor.execute("SELECT * FROM users WHERE username = %s", (username,))

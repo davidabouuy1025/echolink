@@ -12,10 +12,10 @@ import streamlit as st
 from typing import Optional, List, Tuple
 
 # import your domain classes (must be on pythonpath)
-from app.user import User
+from app.user import User, UserManager
 from app.chat import Chat
-from app.post import Post
-from app.mood import Mood
+from app.post import Post, PostManager
+from app.mood import Mood, MoodManager\
 
 # Configure this to your environment / Streamlit secrets.
 # You can pass a dict to Manager(...) or set these env vars.
@@ -163,12 +163,13 @@ class ManagerSQL:
         """
         # Validate using your User static validators (they internally used Manager with JSON; we skip that)
         # But to keep behavior consistent, call the same validations if present:
-        err1 = User.username_validation(username)
-        if err1:
-            return None, err1
-        err2 = User.password_validation(password)
-        if err2:
-            return None, err2
+        
+        # err1 = UserManager.validate_username(username)
+        # if err1:
+        #     return None, err1
+        # err2 = UserManager.validate_password(password)
+        # if err2:
+        #     return None, err2
 
         conn = self._get_conn()
         try:

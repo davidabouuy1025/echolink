@@ -89,7 +89,7 @@ def friend():
                         col1, col2 = st.columns(2)
 
                         with col1:
-                            with st.container(border=True):
+                            with st.container(border=True, height='stretch'):
                                 # Profile Picture
                                 if friend_obj.profile_pic:
                                     st.image(friend_obj.profile_pic, width=200)
@@ -104,7 +104,7 @@ def friend():
                                 st.markdown(f"**Status:** {friend_obj.status}")
 
                         with col2:
-                            with st.container(border=True):
+                            with st.container(border=True, height='stretch'):
                                 # Display User's Posts
                                 st.subheader(f"@{friend_obj.username}'s Posts 🖼️")
                                 # Filter posts by user_id
@@ -114,8 +114,10 @@ def friend():
                                     for post in user_posts:
                                         st.markdown(f"**Posted on:** {post.datetime}")
                                         if post.image_path:
-                                            for img in post.image_path:  # assuming image_path is a list of strings
-                                                st.image(img, width=300)
+                                            try:
+                                                st.image(post.image_path, width=300)
+                                            except:
+                                                st.warning(f"Fail in loading picture '{post.image_path}'")
                                         else:
                                             st.info("No images in this post.")
                                         st.divider()

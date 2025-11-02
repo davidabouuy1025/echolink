@@ -132,10 +132,13 @@ def dashboard():
             cols = st.columns(num_cols)
 
             for idx, photo_path in enumerate(post_paths):
-                # Open image
-                img = Image.open(photo_path)
+                try:
+                    # Open image
+                    img = Image.open(photo_path)
 
-                # Determine which column to put this image in
-                col = cols[idx % num_cols]
-                col.image(img, width=300)
+                    # Determine which column to put this image in
+                    col = cols[idx % num_cols]
+                    col.image(img, width=300)
+                except FileNotFoundError:
+                    st.write(f"⚠️ File '{photo_path}' Not Found")
 

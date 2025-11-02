@@ -28,8 +28,6 @@ def readme():
 
         - License
 
-        <br>
-
         # Test Account
         - Username: ```user1```
         - Password: ```userPW101```
@@ -184,6 +182,9 @@ def readme():
 
         ## License
 
-        This project is licensed under the MIT License. See LICENSE
-        for details.
+        https://github.com/davidabouuy1025/echolink.git (HD)
+                
+        https://github.com/davidabouuy1025/echo.git (D)
+                
+        https://echolink.streamlit.app/ (Deployment)
     """)

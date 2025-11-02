@@ -56,7 +56,7 @@ def dashboard():
                     if st.button("Save"):
                         manager.add_remark(user_id, remark)
                         manager.save()
-                        st.toast(f"Remark for {datetime.datetime.now().strftime("%Y-%m-%d")} is changed to '{remark}'")
+                        st.toast(f"Remark for {datetime.datetime.now().strftime('%Y-%m-%d')} is changed to '{remark}'")
 
             with col2:
                 today = datetime.datetime.now().strftime("%Y-%m-%d")

@@ -1,66 +1,65 @@
+import streamlit as st
+import datetime
+import time
+from gui.user.dashboard import dashboard
+from gui.user.moods import moods
+from gui.user.chat import chat
+from gui.user.friend import friend
+from gui.user.profile_page import profile
+from gui.user.show_json import show_json  # Optional
+
 def user_page():
-    import streamlit as st
-    import datetime
-    import time
-    from gui.user.dashboard import dashboard
-    from gui.user.moods import moods
-    from gui.user.chat import chat
-    from gui.user.friend import friend
-    from gui.user.profile_page import profile
-    from gui.user.show_json import show_json
-    
-    # Variables
+    # --- Variables ---
     manager = st.session_state.manager
     user_id = st.session_state.user_id
-    current_user = next((u for u in manager.users if str(u.user_id) == str(user_id)), None)
-    # current_user.status = "online"
-    # print(f'Set user @{user_id} to ONLINE')
-    # current_user.last_active = datetime.datetime.now().strftime("%d/%m/%Y")
-    manager.save()
+
+    # Fetch user from DB
+    current_user = manager.get_user_by_id(user_id)
 
     if not current_user:
-        st.warning("User data not loaded yet, Please refresh  or log in again")
+        st.warning("User data not loaded yet. Please refresh or log in again.")
         st.stop()
 
-    # Session states
-    if "logout_triggered" in st.session_state and st.session_state.logout_triggered:
-        st.session_state.logout_triggered = False
-        st.rerun()
+    # --- Profile completeness ---
+    profile_fields = [current_user.username, current_user.password, current_user.name,
+                      current_user.gender, current_user.bday, current_user.contact_num]
+    st.session_state.profile_not_completed = "completed" if all(profile_fields) else "incompleted"
 
-    if current_user.username and current_user.password and current_user.name and current_user.gender and current_user.bday and current_user.contact_num:
-        st.session_state.profile_not_completed = "completed"
-    else:
-        st.session_state.profile_not_completed = "incompleted"
+    # --- Initialize session_state keys ---
+    defaults = {
+        "username": "",
+        "chat_menu": "",
+        "success_msg": "",
+        "status": "offline",
+        "refresh": "unchanged",
+        "logout_triggered": False,
+        "chat_friend": "",
+        "chat_input": "",
+        "friend_id": "",
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
 
-    if "username" not in st.session_state:
-        st.session_state.username = ""
-
-    if "chat_menu" not in st.session_state:
-        st.session_state.chat_menu = ""
-
-    if "success_msg" not in st.session_state:
-        st.session_state.success_msg = ""
-
-    if "status" not in st.session_state:
-        st.session_state.status = "offline"
-
+    # --- Auto-refresh handling ---
     if st.session_state.get("refresh") == "refresh":
         st.session_state.refresh = "unchanged"
         st.rerun()
 
+    # --- Prompt profile completion ---
     if st.session_state.profile_not_completed == "incompleted":
         st.warning("⚠️ Please complete your profile 😉")
 
-    # Page design
+    # --- Page design ---
     st.markdown("<h1 style='text-align:center'>EchoLink 🔎🔊</h1>", unsafe_allow_html=True)
     st.sidebar.markdown("# :rainbow[EchoLink]", unsafe_allow_html=True)
     st.sidebar.write(f"@{current_user.username}")
     st.divider()
-    menu = st.sidebar.radio("Menu", ["Dashboard", "Moods", "Chats", "Friends",  "Profile"])
 
-    # Page design
+    menu = st.sidebar.radio("Menu", ["Dashboard", "Moods", "Chats", "Friends", "Profile"])
     st.sidebar.button("Logout 🚪", on_click=logout, args=(manager, user_id), use_container_width=True)
 
+    # --- Menu routing ---
     if menu == "Dashboard":
         dashboard()
     elif menu == "Moods":
@@ -72,33 +71,36 @@ def user_page():
     elif menu == "Profile":
         profile()
 
+    # --- Show success message ---
+    if st.session_state.success_msg:
+        st.success(st.session_state.success_msg)
+        st.session_state.success_msg = ""
 
-# def update_last_active():
-#     manager = st.session_state.manager
-#     username = st.session_state.username
-#     current_user = next((u for u in manager.users if u.username == username), None)
-#     st.info(current_user)
-    
-#     if current_user:
-#         current_user.last_active = datetime.datetime.now().isoformat()
-#         manager.save()
+
+# --- Status & Logout functions ---
 
 def set_offline(manager, user_id):
-    current_user = next((u for u in manager.users if u.user_id == user_id), None)
-    print(current_user)
-    print(current_user.user_id)
-    current_user.status = "offline"
-    manager.save()
+    """
+    Set user status to offline in the database.
+    """
+    manager.update_status(user_id, "offline")
+
 
 def logout(manager, user_id):
-    import time 
-    import streamlit as st
-
+    """
+    Logs out the user, clears session state, and sets offline status.
+    """
     set_offline(manager, user_id)
     time.sleep(0.5)
+
+    # Clear relevant session_state keys
+    keys_to_clear = [
+        "page", "username", "user_id", "chat_menu", "profile_not_completed",
+        "chat_friend", "chat_input", "friend_id", "success_msg",
+        "refresh", "logout_triggered"
+    ]
+    for key in keys_to_clear:
+        st.session_state.pop(key, None)
+
+    # Set page to login
     st.session_state.page = "login"
-    st.session_state.username = None
-    st.session_state.user_id = ""
-    # st.cache_data.clear()
-    # st.cache_resource.clear()
-    st.session_state.pop("logout_triggered", None)

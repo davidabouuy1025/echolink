@@ -1,5 +1,9 @@
+import mysql.connector
+from datetime import datetime
+
 class User:
-    def __init__(self, user_id, username, password, name, gender, bday, contact_num, profile_pic, status, last_active, remark, chat_ids, friends, friend_request):
+    def __init__(self, user_id, username, password, name, gender, bday, contact_num,
+                 profile_pic, status, last_active, remark, chat_ids, friends, friend_request):
         self.user_id = user_id
         self.username = username
         self.password = password
@@ -14,120 +18,71 @@ class User:
         self.chat_ids = chat_ids or []
         self.friends = friends or []
         self.friend_request = friend_request or []
-    
-    def create_user_object(user_id, username, password, current_dt, chat_ids, friends, friend_request):
-        return User(user_id, username, password, "", "", "", "", "", "online", current_dt, "", chat_ids, friends, friend_request)
-    
-    def username_validation(username):
-        from manager.manager import Manager
-        manager = Manager()
 
-        error  = []
-        all_username = [u.username for u in manager.users]
+    @staticmethod
+    def create_user_object(user_id, username, password, current_dt):
+        """Factory method for creating new users"""
+        return User(user_id, username, password, "", "", "", "", "", "online",
+                    current_dt, "", [], [], [])
 
-        if username in all_username:
-            error.append("Username exists")
+# ────────────────────────────────────────────────────────────────
+# MANAGER (Database access layer)
+# ────────────────────────────────────────────────────────────────
 
-        if error:
-            return error
-        
-    def password_validation(password):
-        from manager.manager import Manager
-        manager = Manager()
+class UserManager:
+    def __init__(self, config):
+        self.conn = mysql.connector.connect(**config)
+        self.cursor = self.conn.cursor(dictionary=True)
+        self.create_table()
 
-        error  = []
+    def create_table(self):
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password VARCHAR(100) NOT NULL,
+                name VARCHAR(100),
+                gender VARCHAR(10),
+                bday DATE,
+                contact_num VARCHAR(20),
+                profile_pic VARCHAR(255),
+                status VARCHAR(20),
+                last_active DATETIME,
+                remark TEXT,
+                chat_ids JSON,
+                friends JSON,
+                friend_request JSON
+            );
+        """)
+        self.conn.commit()
 
-        if len(password) < 8:
-            error.append("Password is too short.")
-        elif not any(char.upper() for char in password):
-            error.append("Password should contain at least one uppercase.")
-        elif not any(char.isnumeric() for char in password):
-            error.append("Password should contain at least one number.")
+    def add_user(self, username, password):
+        now = datetime.now()
+        sql = """INSERT INTO users (username, password, status, last_active, chat_ids, friends, friend_request)
+                 VALUES (%s, %s, %s, %s, %s, %s, %s)"""
+        self.cursor.execute(sql, (username, password, "online", now, "[]", "[]", "[]"))
+        self.conn.commit()
 
-        if error:
-            return error
-        
-    def login_user(manager, username, password):
-        all_users = {u.username:u.password for u in manager.users}
-        
-        if username not in all_users.keys():
+    def get_user_by_username(self, username):
+        self.cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        row = self.cursor.fetchone()
+        if not row:
+            return None
+        return User(**row)
+
+    def validate_username(self, username):
+        self.cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
+        return self.cursor.fetchone() is not None
+
+    def login_user(self, username, password):
+        self.cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = self.cursor.fetchone()
+        if not user:
             return False, "Username not found"
-        else:
-            check_user = all_users[username]
-            if password != check_user:
-                return False, "Username and password doesn't match"
-            else:
-                return True, "Successfully logged in"
-        
-    def check_id(manager, username):
-        user = next((u for u in manager.user if u.username == username))
-        return user.user_id
+        elif user["password"] != password:
+            return False, "Username and password don't match"
+        return True, "Successfully logged in"
 
-    def check_username(manager, username):
-        all_username = [u.username for u in manager.users]
-        return username in all_username
-    
-    @staticmethod
-    def check_req(manager, sender_id, friend_uname):
-        # Find the receiver (friend) user object
-        receiver = next((u for u in manager.users if u.username == friend_uname), None)
-        sender = next((u for u in manager.users if u.user_id == sender_id), None)
-
-        # Check if user exists
-        if not receiver or not sender:
-            return "not_found"
-
-        # Rule 1: Cannot add yourself
-        if receiver.user_id == sender.user_id:
-            return "self_request"
-
-        # Rule 2: Already friends
-        if receiver.user_id in sender.friends:
-            return "already_friends"
-
-        # Rule 3: Check if a request already exists (pending)
-        for req in receiver.friend_request:
-            if req[1] == sender_id:
-                return "already_sent"
-
-        return "ok"  # All clear
-
-    @staticmethod
-    def id_to_object(manager, req_list):
-        result = []
-        for timestamp, sender_id in req_list:
-            sender_user = next((u for u in manager.users if u.user_id == sender_id), None)
-            if sender_user:
-                result.append([sender_user, timestamp])
-        return result
-    
-    @staticmethod
-    def id_to_object_friends(manager, req_list):
-        result = []
-        for item in req_list:
-            if isinstance(item, (list, tuple)) and len(item) == 2:
-                date, user_id = item
-            else:
-                user_id = item
-                date = None
-
-            user_obj = next((u for u in manager.users if u.user_id == user_id), None)
-            if user_obj:
-                result.append([user_obj, date])
-        return result
-
-    @staticmethod
-    def check_update(new_password, new_name, new_contact_num):
-        errors = []
-
-        if not new_password or len(new_password) < 8:
-            errors.append("Password must be at least 8 characters long.")
-        if not new_name:
-            errors.append("Name cannot be empty.")
-        if not new_contact_num:
-            errors.append("Contact number cannot be empty.")
-
-        if errors:
-            return False, errors
-        return True, "ok"
-    
+    def update_status(self, user_id, status):
+        self.cursor.execute("UPDATE users SET status = %s WHERE user_id = %s", (status, user_id))
+        self.conn.commit()

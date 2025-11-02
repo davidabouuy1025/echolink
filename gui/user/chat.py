@@ -1,125 +1,173 @@
 import streamlit as st
-import os
-from streamlit_autorefresh import st_autorefresh
+import datetime
+import time
 from app.user import User
+from streamlit_autorefresh import st_autorefresh
 
 
-def chat():
-    # --- Smart auto-refresh when chat file changes (not working) ---
-    # chat_file = "data/chat.json"
-    # if os.path.exists(chat_file):
-    #     last_modified = os.path.getmtime(chat_file)
-    #     prev = st.session_state.get("chat_file_mtime", 0)
-        
-    #     if last_modified != prev:
-    #         st.session_state.chat_file_mtime = last_modified
-    #         st_autorefresh(interval=100, key="chat_refresh_once")
-
-    st_autorefresh(interval=1000)
-
-    chat_file = "data/chat.json"
-    last_modified = os.path.getmtime(chat_file)
-    # print(last_modified)
-
-
-    if "chat_friend" not in st.session_state:
-        st.session_state.chat_friend = ""
-
-    # --- Variables ---
+def friend():
     manager = st.session_state.manager
     user_id = st.session_state.user_id
+    current_user = manager.get_user_by_id(user_id)  # MySQL fetch
 
-    st.subheader("Your Friends")
-    current_user = next((u for u in manager.users if str(u.user_id) == str(user_id)), None)
+    tab1, tab2, tab3 = st.tabs(["Add Friend", "View Request", "Edit Status"])
 
-    friends_disp = {user.user_id: user.username for user in manager.users}
-    # st.info(friends_disp)
+    if "refresh_active" not in st.session_state:
+        st.session_state.refresh_active = True
 
-    friend_list = [friends_disp[friend] for dt, friend in current_user.friends]
-    # st.info(friend_list)
+    if st.session_state.refresh_active:
+        st_autorefresh(interval=3000, key="auto_refresh_key")
 
-    friend_disp = {f"{u.username}": u.user_id for u in manager.users if str(u.username) in friend_list}
-    # st.info(friend_disp)
+    # --- Add Friend Tab ---
+    with tab1:
+        col1, col2 = st.columns(2)
 
-    if "chat_input" not in st.session_state:
-        st.session_state.chat_input = ""
+        with col1:
+            st.header("Add Friends 🥰")
+            add_friend_uname = st.text_input("Enter friend's username")
+            add_button = st.button("Send Request")
 
-    if not friend_list:
-        st.warning("You may want to add some friends first 🤔")
-        return
-    
-    if "friend_id" not in st.session_state:
-        st.session_state.friend_id = ""
+            if add_button:
+                friend_obj = manager.get_user_by_username(add_friend_uname)
 
-    if "chat" not in st.session_state:
-        st.session_state.chat = []
-    
-    # --- Load previous chat ---
-    friend_id = st.session_state.friend_id
-    chat_history = manager.get_chat_history(current_user.user_id, friend_id)
-
-    # --- Input box ---
-    selected_friend = st.selectbox("Select Your Friend", friend_disp.keys())
-    friend_id = friend_disp[selected_friend]
-    st.session_state.chat_friend = friend_id
-
-    # --- Friend Profile ---
-    with st.container(border=True):
-        if st.session_state.chat_friend != "":
-            chat_friend = next((u for u in manager.users if u.user_id == st.session_state.chat_friend), None)
-
-            if chat_friend:
-                st.write(f"@{chat_friend.username}")
-                if chat_friend.gender == "Male":
-                    pronoun = "His"
-                elif chat_friend.gender == "Female":
-                    pronoun = "Her"
+                if not friend_obj:
+                    st.warning(f"@{add_friend_uname} not found!")
                 else:
-                    pronoun = "Them"
-                st.write(f"{pronoun}: {chat_friend.remark}")
+                    status = manager.check_friend_status(current_user.user_id, friend_obj.user_id)
 
-    # --- Initialize chat counter if not exist ---
-    chat_key = f"chat_count_{friend_id}"
-    if chat_key not in st.session_state:
-        st.session_state[chat_key] = len(manager.get_chat_history(user_id, friend_id))
+                    if status == "self_request":
+                        st.warning("You cannot send a friend request to yourself 🤨")
+                    elif status == "already_friends":
+                        st.info(f"You are already friends with @{add_friend_uname}")
+                    elif status == "already_sent":
+                        st.warning(f"You have already sent a request to @{add_friend_uname}")
+                    elif status == "ok":
+                        manager.add_friend_request(current_user.user_id, friend_obj.user_id)
+                        st.toast(f"Friend request sent to @{add_friend_uname} ✅")
 
-    # --- Smart rerun if new message count detected ---
-    current_count = len(manager.get_chat_history(user_id, friend_id))
-    if current_count != st.session_state[chat_key]:
-        st.session_state[chat_key] = current_count
-        st.rerun()
-
-    # --- Load previous chat ---
-    chat_history = manager.get_chat_history(current_user.user_id, friend_id)
-
-    with st.form("chat-preview"):
-        # No chats found
-        if not chat_history:
-            st.markdown("<span style='text-align:center'>Start your chat with your friends! 🤗</span>", unsafe_allow_html=True)
-        
-        # Display chat
-        for c in chat_history:
-            if c.sender == current_user.user_id:
-                st.markdown(f"<h6 style='text-align: right'>{c.content} 🟢</h6>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"🔵 **{selected_friend}:** {c.content}")
+        with col2:
+            st.header("Recommendation")
+            st.write("No suggested friends currently")
 
         st.divider()
-        col1, col2 = st.columns([8, 2])
-        with col1:
-            new_message = st.text_input("Type a message...", value=st.session_state.chat_input, label_visibility="collapsed")
-        with col2:
-            send_button = st.form_submit_button("Send", use_container_width=True)
 
-        # --- When message is sent ---
-        if send_button and new_message.strip():
-            result = manager.add_chat(current_user.user_id, friend_id, new_message)
-            if result == "sent":
-                st.session_state.friend_id = friend_id
-                st.session_state.chat_menu = "Chat"
-                st.session_state[f"chat_count_{friend_id}"] = len(manager.get_chat_history(user_id, friend_id))
-                st.session_state.chat_input = ""
-                st.rerun()
-            else:
-                st.error(result)
+        # --- Your Friends List ---
+        st.header("Find Your Friend 😛")
+        friends = manager.get_friends(current_user.user_id)
+        if not friends:
+            st.error("No friends found ☹️")
+        else:
+            friend_usernames = [f["username"] for f in friends]
+            choose_username = st.selectbox("Select friend", friend_usernames)
+            if st.button("Load Profile 🤩"):
+                st.session_state.refresh_active = False
+                friend_obj = manager.get_user_by_username(choose_username)
+                if friend_obj:
+                    st.divider()
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.image(friend_obj.profile_pic or "https://cdn-icons-png.flaticon.com/512/3177/3177440.png", width=200)
+                        st.markdown(f"## @{friend_obj.username}")
+                        st.markdown(f"**Name:** {friend_obj.name}")
+                        st.markdown(f"**Gender:** {friend_obj.gender}")
+                        st.markdown(f"**Birthday:** {friend_obj.bday}")
+                        st.markdown(f"**Status:** {friend_obj.status}")
 
+                    with col2:
+                        st.subheader(f"@{friend_obj.username}'s Posts 🖼️")
+                        posts = manager.get_posts(friend_obj.user_id)
+                        if posts:
+                            for post in posts:
+                                st.markdown(f"**Posted on:** {post['datetime']}")
+                                st.image(post["image_path"], width=300)
+                                st.divider()
+                        else:
+                            st.info("No posts yet 🥹")
+                else:
+                    st.error("Friend not found ❌")
+
+    # --- Friend Requests Tab ---
+    with tab2:
+        st.header("Friend Requests 💌")
+        requests = manager.get_friend_requests(current_user.user_id)
+        if requests:
+            for idx, req in enumerate(requests):
+                sender = manager.get_user_by_id(req["sender_id"])
+                timestamp = req["timestamp"]
+                col1, col2, col3, col4, col5 = st.columns(5)
+                with col1:
+                    st.markdown(f"Request {idx + 1}:")
+                with col2:
+                    st.markdown(f"@{sender.username}")
+                with col3:
+                    st.markdown(f"{timestamp}")
+                with col4:
+                    accept_button = st.button("Accept", key=f"accept_{idx}")
+                with col5:
+                    reject_button = st.button("Reject", key=f"reject_{idx}")
+
+                if accept_button:
+                    manager.accept_request(current_user.user_id, sender.user_id)
+                    st.session_state.success_msg = f"You are now friends with @{sender.username}"
+                    st.rerun()
+                if reject_button:
+                    manager.reject_request(current_user.user_id, sender.user_id)
+                    st.info(f"Rejected friend request from @{sender.username}")
+                    st.rerun()
+        else:
+            st.warning("No friend request 🤔")
+
+    # --- Edit Status / Unfriend Tab ---
+    with tab3:
+        st.header("Your Friends 👥")
+        friends = manager.get_friends(current_user.user_id)
+        if friends:
+            for idx, f in enumerate(friends):
+                user_obj = manager.get_user_by_id(f["friend_id"])
+                form_key = f"dlt_{user_obj.user_id}"
+                confirm_key = f"confirm_unfriend_{user_obj.user_id}"
+                with st.form(key=form_key):
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.markdown(f"<span style='font-size:200%'><b>Friend {idx+1}</b></span>", unsafe_allow_html=True)
+                    with col2:
+                        gender_icon = {"His 👦": "👦", "Her 👧": "👧"}.get(user_obj.gender, "❔")
+                        st.markdown(f"<span style='font-size:170%'>#{user_obj.username} {gender_icon}</span>", unsafe_allow_html=True)
+                    with col3:
+                        status_icon = "🟢" if user_obj.status == "online" else "🔴"
+                        st.markdown(f"<span style='font-size:170%'>{user_obj.status} {status_icon}</span>", unsafe_allow_html=True)
+                    with col4:
+                        unfriend_button = st.form_submit_button("Unfriend ❌", use_container_width=True)
+
+                if unfriend_button:
+                    st.session_state.refresh_active = False
+                    st.session_state[confirm_key] = True
+
+                if st.session_state.get(confirm_key, False):
+                    st.warning(f"Are you sure you want to unfriend @{user_obj.username}? This will **delete all chats**.", icon="⚠️")
+                    colA, colB = st.columns(2)
+                    with colA:
+                        yes = st.button("Yes, unfriend", key=f"yes_{user_obj.user_id}")
+                    with colB:
+                        no = st.button("Cancel", key=f"no_{user_obj.user_id}")
+
+                    if yes:
+                        with st.spinner("Processing...", show_time=True):
+                            time.sleep(1)
+                            manager.unfriend(current_user.user_id, user_obj.user_id)
+                            st.success(f"You have unfriended @{user_obj.username} and all chats were deleted.")
+                            st.session_state[confirm_key] = False
+                            st.session_state.refresh_active = True
+                            st.rerun()
+                    elif no:
+                        st.session_state[confirm_key] = False
+                        st.session_state.refresh_active = True
+                        st.session_state.success_msg = "Cancelled. No changes made."
+                        st.rerun()
+
+        else:
+            st.warning("No friends found 🥹")
+
+    if "success_msg" in st.session_state and st.session_state.success_msg != "":
+        st.success(st.session_state.success_msg)
+        st.session_state.success_msg = ""

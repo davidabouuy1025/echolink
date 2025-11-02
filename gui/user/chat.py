@@ -17,66 +17,66 @@ def chat():
 
     st_autorefresh(interval=1000)
 
+    chat_file = "data/chat.json"
+    last_modified = os.path.getmtime(chat_file)
+    # print(last_modified)
+
+
     if "chat_friend" not in st.session_state:
         st.session_state.chat_friend = ""
 
     # --- Variables ---
     manager = st.session_state.manager
     user_id = st.session_state.user_id
-    col1, col2 = st.columns([3,1])
 
-    with col2:
-        with st.container(border=True):
-            st.write("Your friend")
+    st.subheader("Your Friends")
+    current_user = next((u for u in manager.users if str(u.user_id) == str(user_id)), None)
 
-            if st.session_state.chat_friend != "":
-                chat_friend = next((u for u in manager.users if u.user_id == st.session_state.chat_friend), None)
+    friends_disp = {user.user_id: user.username for user in manager.users}
+    # st.info(friends_disp)
 
-                if chat_friend:
-                    st.write(f"@{chat_friend.username}")
-                    if chat_friend.gender == "Male":
-                        pronoun = "His"
-                    elif chat_friend.gender == "Female":
-                        pronoun = "Her"
-                    else:
-                        pronoun = "Them"
-                    st.write(f"{pronoun}: {chat_friend.remark}")
+    friend_list = [friends_disp[friend] for dt, friend in current_user.friends]
+    # st.info(friend_list)
 
+    friend_disp = {f"{u.username}": u.user_id for u in manager.users if str(u.username) in friend_list}
+    # st.info(friend_disp)
 
-    with col1:
-        st.subheader("Your Friends")
-        current_user = next((u for u in manager.users if str(u.user_id) == str(user_id)), None)
+    if "chat_input" not in st.session_state:
+        st.session_state.chat_input = ""
 
-        friends_disp = {user.user_id: user.username for user in manager.users}
-        # st.info(friends_disp)
+    if not friend_list:
+        st.warning("You may want to add some friends first 🤔")
+        return
+    
+    if "friend_id" not in st.session_state:
+        st.session_state.friend_id = ""
 
-        friend_list = [friends_disp[friend] for dt, friend in current_user.friends]
-        # st.info(friend_list)
+    if "chat" not in st.session_state:
+        st.session_state.chat = []
+    
+    # --- Load previous chat ---
+    friend_id = st.session_state.friend_id
+    chat_history = manager.get_chat_history(current_user.user_id, friend_id)
 
-        friend_disp = {f"{u.username}": u.user_id for u in manager.users if str(u.username) in friend_list}
-        # st.info(friend_disp)
+    # --- Input box ---
+    selected_friend = st.selectbox("Select Your Friend", friend_disp.keys())
+    friend_id = friend_disp[selected_friend]
+    st.session_state.chat_friend = friend_id
 
-        if "chat_input" not in st.session_state:
-            st.session_state.chat_input = ""
+    # --- Friend Profile ---
+    with st.container(border=True):
+        if st.session_state.chat_friend != "":
+            chat_friend = next((u for u in manager.users if u.user_id == st.session_state.chat_friend), None)
 
-        if not friend_list:
-            st.warning("You may want to add some friends first 🤔")
-            return
-        
-        if "friend_id" not in st.session_state:
-            st.session_state.friend_id = ""
-
-        if "chat" not in st.session_state:
-            st.session_state.chat = []
-        
-        # --- Load previous chat ---
-        friend_id = st.session_state.friend_id
-        chat_history = manager.get_chat_history(current_user.user_id, friend_id)
-
-        # --- Input box ---
-        selected_friend = st.selectbox("Select Your Friend", friend_disp.keys())
-        friend_id = friend_disp[selected_friend]
-        st.session_state.chat_friend = friend_id
+            if chat_friend:
+                st.write(f"@{chat_friend.username}")
+                if chat_friend.gender == "Male":
+                    pronoun = "His"
+                elif chat_friend.gender == "Female":
+                    pronoun = "Her"
+                else:
+                    pronoun = "Them"
+                st.write(f"{pronoun}: {chat_friend.remark}")
 
     # --- Initialize chat counter if not exist ---
     chat_key = f"chat_count_{friend_id}"

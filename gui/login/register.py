@@ -21,6 +21,9 @@ def register():
                         st.error(e)
                 else:
                     st.toast(result)
+                    current_user = next((u for u in manager.users if u.username == new_username), None)
+                    current_user.status = "online"
+                    manager.save()
                     st.session_state.page = "user"
                     st.session_state.user_id = user_id
                     manager.save()

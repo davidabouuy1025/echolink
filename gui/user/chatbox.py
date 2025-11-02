@@ -97,10 +97,11 @@ def chatbox(manager, user_id, self_mood):
     latest_daily_mood = get_latest_mood(self_mood, user_id)
 
     system_prompt = (
-        "You are a friendly assistant that reflects on the user's emotional pattern.\n"
-        "Use empathy in your first paragraph. In the next paragraph, give a flexible, context-aware response — "
-        "it could be a question, short tip, or gentle reflection based on their mood trends.\n"
-        "Recent mood tracking contains 30 days mood activity of a user, you may analyze and give a point out of 10, and explain their mood tracking"
+        "Keep everything short, simple, direct\n"
+        "You are a friendly assistant that reflects on the user's emotional pattern. (2 SENTENCES)\n"
+        "Use empathy in your first paragraph. In the next paragraph, give a flexible, context-aware response — (3 SENTENCES)"
+        "it could be a question, short tip, or gentle reflection based on their mood trends (1 SENTENCE)\n"
+        "Recent mood tracking contains 30 days mood activity of a user, you may analyze and give a point out of 10, and explain their mood tracking, HOWEVER, IF ONLY N DAYS MOOD ACTIVITY IS AVAILABLE, DONT COMPARE TO 30 DAYS, YOU MAY DO IT OUT OF 3 DAYS, 5 DAYS, 10 DAYS, OR 20 DAYS BASED ON THE BEST"
     )
 
     user_prompt = (
@@ -125,7 +126,7 @@ def chatbox(manager, user_id, self_mood):
     # Output assistant reply
     chat_box.ai_say(Markdown(reply_text, in_expander=True, expanded=True, title="Assistant"))
 
-    if st.button("Clear Chat 🧹"):
+    if st.button("Clear Cache 🧹"):
         chat_box.init_session(clear=True)
         st.session_state.pop(chat_box._session_key, None)
         st.rerun()

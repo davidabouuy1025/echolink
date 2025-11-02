@@ -18,6 +18,7 @@ def friend():
 
     if st.session_state.refresh_active:
         st_autorefresh(interval=3000, key="auto_refresh_key")
+        # print('refresh')
 
     with tab1:
         col1, col2 = st.columns(2)
@@ -74,54 +75,54 @@ def friend():
             username_list = [friend.username for friend, dt in all_friends]
             if not username_list:
                 st.error("No friends found ☹️")
-                st.stop()
-            choose_username = st.selectbox("Select friend", username_list)
-            
-            if st.button("Load Profile 🤩"):
-                st.session_state.refresh_active = False
+                
+            else:
+                choose_username = st.selectbox("Select friend", username_list)
+                
+                if st.button("Load Profile 🤩"):
+                    st.session_state.refresh_active = False
 
-                friend_obj = next((u for u in manager.users if u.username == choose_username), None)
-                if friend_obj:
-                    st.divider()
+                    friend_obj = next((u for u in manager.users if u.username == choose_username), None)
+                    if friend_obj:
+                        st.divider()
 
-                    col1, col2 = st.columns(2)
+                        col1, col2 = st.columns(2)
 
-                    with col1:
-                        with st.container(border=True):
-                            # Profile Picture
-                            if friend_obj.profile_pic:
-                                st.image(friend_obj.profile_pic, width=200)
-                            else:
-                                st.image("https://cdn-icons-png.flaticon.com/512/3177/3177440.png", width=100, caption="Default Avatar")
+                        with col1:
+                            with st.container(border=True):
+                                # Profile Picture
+                                if friend_obj.profile_pic:
+                                    st.image(friend_obj.profile_pic, width=200)
+                                else:
+                                    st.image("https://cdn-icons-png.flaticon.com/512/3177/3177440.png", width=100, caption="Default Avatar")
 
-                            # User Info
-                            st.markdown(f"## @{friend_obj.username}")
-                            st.markdown(f"**Name:** {friend_obj.name}")
-                            st.markdown(f"**Gender:** {friend_obj.gender}")
-                            st.markdown(f"**Birthday:** {friend_obj.bday}")
-                            st.markdown(f"**Status:** {friend_obj.status}")
+                                # User Info
+                                st.markdown(f"## @{friend_obj.username}")
+                                st.markdown(f"**Name:** {friend_obj.name}")
+                                st.markdown(f"**Gender:** {friend_obj.gender}")
+                                st.markdown(f"**Birthday:** {friend_obj.bday}")
+                                st.markdown(f"**Status:** {friend_obj.status}")
 
-                    with col2:
-                        with st.container(border=True):
-                            # Display User's Posts
-                            st.subheader(f"@{friend_obj.username}'s Posts 🖼️")
-                            # Filter posts by user_id
-                            user_posts = [post for post in manager.posts if post.user_id == friend_obj.user_id]
+                        with col2:
+                            with st.container(border=True):
+                                # Display User's Posts
+                                st.subheader(f"@{friend_obj.username}'s Posts 🖼️")
+                                # Filter posts by user_id
+                                user_posts = [post for post in manager.posts if post.user_id == friend_obj.user_id]
 
-                            if user_posts:
-                                for post in user_posts:
-                                    st.markdown(f"**Posted on:** {post.datetime}")
-                                    if post.image_path:
-                                        for img in post.image_path:  # assuming image_path is a list of strings
-                                            st.image(img, width=300)
-                                    else:
-                                        st.info("No images in this post.")
-                                    st.divider()
-                            else:
-                                st.info("No posts yet 🥹")
-                else:
-                    st.error("Friend not found ❌")
-
+                                if user_posts:
+                                    for post in user_posts:
+                                        st.markdown(f"**Posted on:** {post.datetime}")
+                                        if post.image_path:
+                                            for img in post.image_path:  # assuming image_path is a list of strings
+                                                st.image(img, width=300)
+                                        else:
+                                            st.info("No images in this post.")
+                                        st.divider()
+                                else:
+                                    st.info("No posts yet 🥹")
+                    else:
+                        st.error("Friend not found ❌")
 
     with tab2:
         # View Friend Request
@@ -163,7 +164,7 @@ def friend():
         else:
             st.warning("No friend request 🤔")
 
-        manager.load_data()
+        # manager.load_data()
             
     with tab3:
         st.header("Your Friends 👥")

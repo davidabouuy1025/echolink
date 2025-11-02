@@ -55,6 +55,8 @@ def dashboard():
                     remark = st.text_area(label="Remark", placeholder="Anything you wanna share?", value=current_user.remark, label_visibility='hidden')
                     if st.button("Save"):
                         manager.add_remark(user_id, remark)
+                        manager.save()
+                        st.toast(f"Remark for {datetime.datetime.now().strftime("%Y-%m-%d")} is changed to '{remark}'")
 
             with col2:
                 today = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -89,7 +91,7 @@ def dashboard():
                     if st.button("Save Mood"):
                         mood_key = [k for k, v in mood_emojis.items() if v == mood_selected][0]
                         manager.set_daily_mood(user_id, mood_key)
-                        st.session_state.update_mood_msg = f"Mood for {today} saved as {mood_selected}!"
+                        st.toast(f"Mood for {today} saved as {mood_selected}!")
             
     st.divider()
 

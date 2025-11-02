@@ -13,7 +13,7 @@ def user_page():
     manager = st.session_state.manager
     user_id = st.session_state.user_id
     current_user = next((u for u in manager.users if str(u.user_id) == str(user_id)), None)
-    current_user.status = "online"
+    # current_user.status = "online"
     # print(f'Set user @{user_id} to ONLINE')
     # current_user.last_active = datetime.datetime.now().strftime("%d/%m/%Y")
     manager.save()

@@ -1,8 +1,6 @@
 import streamlit as st
 import datetime
 
-
-
 def register():
     manager = st.session_state.manager
 

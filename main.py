@@ -1,22 +1,15 @@
 import streamlit as st
 from gui.login.login_page import login_page
-from manager.manager import ManagerSQL  # your MySQL manager
+
+def apply_custom_css(css_file):
+    with open(css_file) as f:
+        css = f.read()
+    st.markdown(f'<style>{css}</style>', unsafe_allow_html=True)
 
 def main():
     st.set_page_config(layout='wide', page_title='EchoLink')
-
-    # --- Initialize session state ---
-    if "manager" not in st.session_state:
-        st.session_state.manager = ManagerSQL()  # connect to MySQL
-
-    if "page" not in st.session_state:
-        st.session_state.page = "login"
-
-    # --- Run login page ---
-    try:
-        login_page()
-    except Exception as e:
-        st.error(f"Error loading page: {e}")
+    apply_custom_css("css/style.css")
+    login_page()
 
 if __name__ == "__main__":
     main()

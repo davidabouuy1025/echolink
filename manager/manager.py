@@ -1,4 +1,3 @@
-# manager_sql.py
 import os
 import json
 import datetime
@@ -154,24 +153,8 @@ class Manager:
             self.chat.append(new_chat)
             self.next_chat_id += 1
             self.save_data()
-    # -------- Chat methods --------
-    def add_chat(self, sender: int, receiver: int, content: str) -> str:
-        if not content:
-            return "Please type something"
-        conn = self._get_conn()
-        cursor = conn.cursor()
-        try:
-            insert = "INSERT INTO chats (sender, receiver, content) VALUES (%s, %s, %s)"
-            cursor.execute(insert, (sender, receiver, content))
-            conn.commit()
-            chat_id = cursor.lastrowid
-            # maintain chat_ids in users? Previously you appended chat_ids to User.__dict__
-            # To keep compatibility, we won't store chat_ids column; instead, frontend can query chats table.
             return "sent"
 
-        finally:
-            cursor.close()
-            conn.close()
 
     def get_chat_history(self, user_id, friend_id):
         chat_thread_lock = threading.Lock()
@@ -191,217 +174,94 @@ class Manager:
         friend.friend_request.append([current_dt, current_user.user_id])
         self.save_data()
         return True
-    def get_chat_history(self, user_id: int, friend_id: int) -> List[Chat]:
-        conn = self._get_conn()
-        cursor = conn.cursor(dictionary=True)
-        try:
-            sql = """
-                SELECT chat_id, sender, receiver, content
-                FROM chats
-                WHERE (sender=%s AND receiver=%s) OR (sender=%s AND receiver=%s)
-                ORDER BY chat_id ASC
-            """
-            cursor.execute(sql, (user_id, friend_id, friend_id, user_id))
-            rows = cursor.fetchall()
-            # Convert to Chat objects
-            chats = [Chat(r["chat_id"], r["sender"], r["receiver"], r["content"]) for r in rows]
-            return chats
-        finally:
-            cursor.close()
-            conn.close()
 
-    # -------- Friend methods --------
-    def add_friend(self, current_user: User, friend_uname: str) -> bool:
-        # find friend
-        conn = self._get_conn()
-        cursor = conn.cursor(dictionary=True)
-        try:
-            cursor.execute("SELECT user_id FROM users WHERE username=%s", (friend_uname,))
-            row = cursor.fetchone()
-            if not row:
-                return False
-            friend_id = row["user_id"]
-            current_dt = datetime.datetime.now().strftime("%d/%m/%Y")
-            # insert into friend_requests if not exists
-            try:
-                cursor.execute("INSERT INTO friend_requests (sender_id, receiver_id, req_date) VALUES (%s,%s,%s)",
-                               (current_user.user_id, friend_id, current_dt))
-                conn.commit()
-            except mysql.connector.IntegrityError:
-                # already exists
-                pass
-            return True
-        finally:
-            cursor.close()
-            conn.close()
+    def accept_request(self, current_user, sender):
+        current_dt = datetime.datetime.now().strftime("%d/%m/%Y")
+        current_user.friends.append([current_dt, sender.user_id])
+        sender.friends.append([current_dt, current_user.user_id])
+        current_user.friend_request = [req for req in current_user.friend_request if req[1] != sender.user_id]
+        self.save_data()
 
-    def accept_request(self, current_user: User, sender: User):
-        conn = self._get_conn()
-        cursor = conn.cursor()
-        try:
-            current_dt = datetime.datetime.now().strftime("%d/%m/%Y")
-            # create friendship both sides, using INSERT IGNORE-style logic via try/except
-            try:
-                cursor.execute("INSERT INTO friends (user_id, friend_id, since_date) VALUES (%s,%s,%s)",
-                               (current_user.user_id, sender.user_id, current_dt))
-            except mysql.connector.IntegrityError:
-                pass
-            try:
-                cursor.execute("INSERT INTO friends (user_id, friend_id, since_date) VALUES (%s,%s,%s)",
-                               (sender.user_id, current_user.user_id, current_dt))
-            except mysql.connector.IntegrityError:
-                pass
-            # remove friend_request
-            cursor.execute("DELETE FROM friend_requests WHERE sender_id=%s AND receiver_id=%s", (sender.user_id, current_user.user_id))
-            conn.commit()
-        finally:
-            cursor.close()
-            conn.close()
+    def unfriend(self, current_user, target_user_id):
+        current_user.friends = [f for f in current_user.friends if f[1] != target_user_id]
+        target_user = next((u for u in self.users if u.user_id == target_user_id), None)
+        if target_user:
+            target_user.friends = [f for f in target_user.friends if f[1] != current_user.user_id]
 
-    def unfriend(self, current_user: User, target_user_id: int) -> bool:
-        conn = self._get_conn()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("DELETE FROM friends WHERE (user_id=%s AND friend_id=%s) OR (user_id=%s AND friend_id=%s)",
-                           (current_user.user_id, target_user_id, target_user_id, current_user.user_id))
-            # delete chats
-            cursor.execute("DELETE FROM chats WHERE (sender=%s AND receiver=%s) OR (sender=%s AND receiver=%s)",
-                           (current_user.user_id, target_user_id, target_user_id, current_user.user_id))
-            conn.commit()
-            return True
-        finally:
-            cursor.close()
-            conn.close()
+        chats_to_remove = [c for c in self.chat if (c.sender == current_user.user_id and c.receiver == target_user_id) or
+                                                (c.sender == target_user_id and c.receiver == current_user.user_id)]
+        for c in chats_to_remove:
+            self.chat.remove(c)
 
-    # -------- Post methods --------
-    def add_post(self, user_id: int, post_file) -> bool:
+        self.save_data()
+        return True
+
+    # ------------------- Post Methods ------------------- #
+    def add_post(self, user_id, post_file):
         post_dir = "user_posts"
         os.makedirs(post_dir, exist_ok=True)
-        # Use same filename logic as JSON manager
-        conn = self._get_conn()
-        cursor = conn.cursor()
-        try:
-            next_dt = datetime.datetime.now().strftime("%d/%m/%Y")
-            # save file
-            # compute next post id using auto-increment; we'll insert file then update path
-            file_ext = os.path.splitext(post_file.name)[1] or ".png"
-            # Insert row first to get post_id
-            cursor.execute("INSERT INTO posts (user_id, image_path, dt) VALUES (%s, %s, %s)", (user_id, "", next_dt))
-            post_id = cursor.lastrowid
-            save_path = os.path.join(post_dir, f"{user_id}_post{post_id}{file_ext}")
-            counter = 1
-            while os.path.exists(save_path):
-                save_path = os.path.join(post_dir, f"{user_id}_{counter}{file_ext}")
-                counter += 1
-            Image.open(post_file).save(save_path)
-            # update record with actual path
-            cursor.execute("UPDATE posts SET image_path=%s WHERE post_id=%s", (save_path, post_id))
-            conn.commit()
-            return True
-        finally:
-            cursor.close()
-            conn.close()
 
-    def get_post(self, user_id: int) -> List[str]:
-        conn = self._get_conn()
-        cursor = conn.cursor(dictionary=True)
-        try:
-            cursor.execute("SELECT image_path FROM posts WHERE user_id=%s ORDER BY post_id DESC", (user_id,))
-            rows = cursor.fetchall()
-            return [r["image_path"] for r in rows]
-        finally:
-            cursor.close()
-            conn.close()
+        next_id = self.next_post_id
+        file_ext = os.path.splitext(post_file.name)[1] or ".png"
+        save_path = os.path.join(post_dir, f"{user_id}_post{next_id}{file_ext}")
+        counter = 1
+        while os.path.exists(save_path):
+            save_path = os.path.join(post_dir, f"{user_id}_{counter}{file_ext}")
+            counter += 1
+        Image.open(post_file).save(save_path)
 
-    # -------- Mood methods --------
-    def get_user_moods(self, user_id: int) -> Mood:
-        # Build Mood object with list of {date,mood}
-        conn = self._get_conn()
-        cursor = conn.cursor(dictionary=True)
-        try:
-            cursor.execute("SELECT mood_date, mood_value FROM moods WHERE user_id=%s ORDER BY mood_date ASC", (user_id,))
-            rows = cursor.fetchall()
-            moods = [{"date": r["mood_date"], "mood": r["mood_value"]} for r in rows]
-            if not moods:
-                # create an empty mood entry for user (equivalent to previous behavior)
-                # no DB insertion required until set_daily_mood is called
-                return Mood(user_id, [])
-            return Mood(user_id, moods)
-        finally:
-            cursor.close()
-            conn.close()
+        new_post = Post(next_id, user_id, save_path, datetime.datetime.now().strftime("%d/%m/%Y"))
+        self.posts.append(new_post)
+        self.next_post_id += 1
+        self.save_data()
+        return True
 
-    def set_daily_mood(self, user_id: int, mood_value: str) -> bool:
+    def get_post(self, user_id):
+        return [p.image_path for p in self.posts if p.user_id == user_id]
+
+    # ------------------- Mood Methods ------------------- #
+    def get_user_moods(self, user_id):
+        mood_obj = next((m for m in self.moods if m.user_id == user_id), None)
+        if not mood_obj:
+            mood_obj = Mood(user_id, [])
+            self.moods.append(mood_obj)
+            self.save_data()
+        return mood_obj
+
+    def set_daily_mood(self, user_id, mood):
         today = datetime.datetime.now().strftime("%Y-%m-%d")
-        conn = self._get_conn()
-        cursor = conn.cursor()
-        try:
-            # insert or update
-            cursor.execute("""
-                INSERT INTO moods (user_id, mood_date, mood_value) VALUES (%s, %s, %s)
-                ON DUPLICATE KEY UPDATE mood_value=VALUES(mood_value)
-            """, (user_id, today, mood_value))
-            conn.commit()
-            return True
-        finally:
-            cursor.close()
-            conn.close()
-
-    def get_last_n_days_moods(self, user_id: int, n: int):
-        # Return list of {date,mood} similar to previous Manager
-        # We'll query last n days from today and match DB rows
-        today = datetime.date.today()
-        dates_needed = [(today - datetime.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(n)]
-        conn = self._get_conn()
-        cursor = conn.cursor(dictionary=True)
-        try:
-            # fetch moods for these dates
-            cursor.execute("""
-                SELECT mood_date, mood_value FROM moods
-                WHERE user_id=%s AND mood_date IN (%s)
-            """ % ("%s", ", ".join(["%s"] * len(dates_needed))), tuple([user_id] + dates_needed))
-            rows = cursor.fetchall()
-            mood_map = {r["mood_date"]: r["mood_value"] for r in rows}
-            result = [{"date": d, "mood": mood_map.get(d, None)} for d in sorted(dates_needed, reverse=True)]
-            return result
-        finally:
-            cursor.close()
-            conn.close()
-
-    def get_monthly_moods_df(self, user_id: int):
-        moods_obj = self.get_user_moods(user_id)
-        if hasattr(moods_obj, "__dict__"):
-            moods = moods_obj.__dict__.get("moods", [])
-        elif isinstance(moods_obj, dict):
-            moods = moods_obj.get("moods", [])
-        elif isinstance(moods_obj, list):
-            moods = moods_obj
+        mood_obj = self.get_user_moods(user_id)
+        today_entry = next((m for m in mood_obj.moods if m["date"] == today), None)
+        if today_entry:
+            today_entry["mood"] = mood
         else:
-            moods = []
+            mood_obj.moods.append({"date": today, "mood": mood})
+        self.save_data()
+        return True
 
+    def get_last_n_days_moods(self, user_id, n):
+        moods = self.get_user_moods(user_id).moods
+        moods_sorted = sorted(moods, key=lambda x: datetime.datetime.strptime(x["date"], "%Y-%m-%d"), reverse=True)
+        latest_n = moods_sorted[:n]
+        today = datetime.datetime.now().date()
+        dates_needed = [(today - datetime.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(n)]
+        mood_dict = {m["date"]: m["mood"] for m in latest_n}
+        return [{"date": d, "mood": mood_dict.get(d)} for d in sorted(dates_needed, reverse=True)]
+
+    def get_monthly_moods_df(self, user_id):
+        moods_obj = self.get_user_moods(user_id)
+        moods = moods_obj.moods if moods_obj else []
         today = datetime.date.today()
-        year = today.year
-        month = today.month
-
-        mood_emojis1 = {
-            "happy": "😊",
-            "sad": "😢",
-            "angry": "😡",
-            "neutral": "😐",
-            "excited": "🤩",
-            "tired": "😴"
-        }
-
-        num_days = cal.monthrange(year, month)[1]
-        all_dates = [datetime.date(year, month, d) for d in range(1, num_days + 1)]
+        num_days = cal.monthrange(today.year, today.month)[1]
+        all_dates = [datetime.date(today.year, today.month, d) for d in range(1, num_days + 1)]
         df = pd.DataFrame({"date": all_dates})
-
         mood_df = pd.DataFrame(moods) if moods else pd.DataFrame(columns=["date", "mood"])
-        if not mood_df.empty and "date" in mood_df:
+        if not mood_df.empty:
             mood_df["date"] = pd.to_datetime(mood_df["date"]).dt.date
 
         df = df.merge(mood_df, on="date", how="left").fillna({"mood": "unknown"})
-        df["mood"] = df["mood"].map(mood_emojis1).fillna("❓")
+        mood_emojis = {"happy": "😊", "sad": "😢", "angry": "😡", "neutral": "😐", "excited": "🤩", "tired": "😴"}
+        df["mood"] = df["mood"].map(mood_emojis).fillna("❓")
         return df
 
     # ------------------- Remark ------------------- #
@@ -413,87 +273,3 @@ class Manager:
 
     def return_user(self, user_id):
         return next((u for u in self.users if u.user_id == user_id), None)
-    # -------- Remark --------
-    def add_remark(self, user_id: int, remark: str):
-        conn = self._get_conn()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("UPDATE users SET remark=%s WHERE user_id=%s", (remark, user_id))
-            conn.commit()
-        finally:
-            cursor.close()
-            conn.close()
-
-    # -------- Utility: migrate existing JSON files into MySQL (optional) --------
-    def migrate_from_json(self, data_dir: str = "data"):
-        """
-        Read JSON files from old structure and insert into DB.
-        Use with caution — run once.
-        """
-        # users
-        users_path = os.path.join(data_dir, "user.json")
-        if os.path.exists(users_path):
-            with open(users_path, "r", encoding="utf-8") as f:
-                ud = json.load(f)
-            for u in ud.get("users", []):
-                try:
-                    self.add_user(u["username"], u["password"])
-                    # update other fields
-                    # find user_id
-                    conn = self._get_conn()
-                    cur = conn.cursor(dictionary=True)
-                    cur.execute("SELECT user_id FROM users WHERE username=%s", (u["username"],))
-                    r = cur.fetchone()
-                    if r:
-                        uid = r["user_id"]
-                        cur.execute("""UPDATE users SET name=%s, gender=%s, bday=%s, contact_num=%s, profile_pic=%s, status=%s, last_active=%s, remark=%s WHERE user_id=%s""",
-                                    (u.get("name",""), u.get("gender",""), u.get("bday",""), u.get("contact_num",""), u.get("profile_pic",""), u.get("status",""), u.get("last_active",""), u.get("remark",""), uid))
-                        conn.commit()
-                    cur.close()
-                    conn.close()
-                except Exception:
-                    pass
-
-        # chats
-        chats_path = os.path.join(data_dir, "chat.json")
-        if os.path.exists(chats_path):
-            with open(chats_path, "r", encoding="utf-8") as f:
-                cd = json.load(f)
-            for c in cd.get("chats", []):
-                try:
-                    self.add_chat(c["sender"], c["receiver"], c["content"])
-                except Exception:
-                    pass
-
-        # posts
-        posts_path = os.path.join(data_dir, "post.json")
-        if os.path.exists(posts_path):
-            with open(posts_path, "r", encoding="utf-8") as f:
-                pdx = json.load(f)
-            for p in pdx.get("posts", []):
-                # p may contain post_path; we only migrate metadata, not copying files
-                try:
-                    conn = self._get_conn()
-                    cur = conn.cursor()
-                    cur.execute("INSERT INTO posts (user_id, image_path, dt) VALUES (%s, %s, %s)",
-                                (p.get("user_id"), p.get("post_path"), p.get("datetime")))
-                    conn.commit()
-                    cur.close()
-                    conn.close()
-                except Exception:
-                    pass
-
-        # moods
-        moods_path = os.path.join(data_dir, "mood.json")
-        if os.path.exists(moods_path):
-            with open(moods_path, "r", encoding="utf-8") as f:
-                md = json.load(f)
-            for m in md.get("moods", []):
-                uid = m.get("user_id")
-                for entry in m.get("moods", []):
-                    try:
-                        self.set_daily_mood(uid, entry.get("mood"))
-                    except Exception:
-                        pass
-
-        return True

@@ -6,20 +6,6 @@ from app.user import User
 
 
 def chat():
-    # --- Smart auto-refresh when chat file changes (not working) ---
-    # chat_file = "data/chat.json"
-    # if os.path.exists(chat_file):
-    #     last_modified = os.path.getmtime(chat_file)
-    #     prev = st.session_state.get("chat_file_mtime", 0)
-        
-    #     if last_modified != prev:
-    #         st.session_state.chat_file_mtime = last_modified
-    #         st_autorefresh(interval=100, key="chat_refresh_once")
-
-    # chat_file = "data/chat.json"
-    # last_modified = os.path.getmtime(chat_file)
-    # print(last_modified)
-
     st_autorefresh(interval=1500)
 
     if "chat_friend" not in st.session_state:
@@ -33,13 +19,10 @@ def chat():
     current_user = next((u for u in manager.users if str(u.user_id) == str(user_id)), None)
 
     friends_disp = {user.user_id: user.username for user in manager.users}
-    # st.info(friends_disp)
 
     friend_list = [friends_disp[friend] for dt, friend in current_user.friends]
-    # st.info(friend_list)
 
     friend_disp = {f"{u.username}": u.user_id for u in manager.users if str(u.username) in friend_list}
-    # st.info(friend_disp)
 
     if "chat_input" not in st.session_state:
         st.session_state.chat_input = ""
@@ -100,22 +83,10 @@ def chat():
                 with col2:
                     st.metric("Remark", chat_friend.remark)
 
-    # # --- Initialize chat counter if not exist ---
-    # chat_key = f"chat_count_{friend_id}"
-    # if chat_key not in st.session_state:
-    #     st.session_state[chat_key] = len(manager.get_chat_history(user_id, friend_id))
-
-    # --- Smart rerun if new message count detected ---
-    # current_count = len(manager.get_chat_history(user_id, friend_id))
-    # if current_count != st.session_state[chat_key]:
-    #     st.session_state[chat_key] = current_count
-    #     st.rerun()
-
     with st.form("chat-preview"):
         # --- Load previous chat ---
         manager.load_data()
         chat_history = manager.get_chat_history(current_user.user_id, friend_id)
-        st.info(chat_history[-1].content)
 
         # No chats found
         if not chat_history:

@@ -63,8 +63,39 @@ def friend():
         with col2:
             # View recommended friends
             with st.container(border=True, width='stretch', height='stretch'):
-                st.header("Recommendation")
-                st.write("No suggested friends currently")
+                st.header("Recommendation 👀")
+                friends_list = manager.recommend_friends(user_id)
+
+                if not friends_list:
+                    st.write("No suggested friends currently")
+                    return
+
+                for friend in friends_list:
+                    with st.container(border=True):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                                st.subheader(f"@{friend.username}")
+                        with col2:
+                            send_req_button = st.button("Follow", width='stretch')
+                            if send_req_button:
+                                check_status = User.check_req(manager, current_user.user_id, add_friend_uname)
+
+                                if check_status == "not_found":
+                                    st.warning(f"@{add_friend_uname} not found!")
+                                    return
+                                elif check_status == "self_request":
+                                    st.warning("You cannot send a friend request to yourself 🤨")
+                                    return
+                                elif check_status == "already_friends":
+                                    st.info(f"You are already friends with @{add_friend_uname}")
+                                    return
+                                elif check_status == "already_sent":
+                                    st.warning(f"You have already sent a request to @{add_friend_uname}")
+                                    return
+                                elif check_status == "ok":
+                                    result = manager.add_friend(current_user, add_friend_uname)
+                                    if result:
+                                        st.toast(f"Friend request sent to @{add_friend_uname} ✅")
 
         st.divider()
 
@@ -211,20 +242,20 @@ def friend():
                 # ✅ Confirmation prompt outside the form
                 if st.session_state.get(confirm_key, False):
                     st.warning(
-                        f"Are you sure you want to unfriend @{friend.username}? This will **delete all chats**.",
+                        f"Are you sure you want to unfriend @{user_obj.username}? This will **delete all chats**.",
                         icon="⚠️"
                     )
                     colA, colB = st.columns(2)
                     with colA:
-                        yes = st.button("Yes, unfriend", key=f"yes_{friend.user_id}")
+                        yes = st.button("Yes, unfriend", key=f"yes_{user_obj.user_id}")
                     with colB:
-                        no = st.button("Cancel", key=f"no_{friend.user_id}")
+                        no = st.button("Cancel", key=f"no_{user_obj.user_id}")
 
                     if yes:
                         with st.spinner("Processing...", show_time=True):
                             time.sleep(1)
-                            manager.unfriend(current_user, friend.user_id)
-                            st.success(f"You have unfriended @{friend.username} and all chats were deleted.")
+                            manager.unfriend(current_user, user_obj.user_id)
+                            st.success(f"You have unfriended @{user_obj.username} and all chats were deleted.")
                             st.session_state[confirm_key] = False
                             st.session_state.refresh_active = True
                             st.rerun()
@@ -233,8 +264,6 @@ def friend():
                         st.session_state.refresh_active = True
                         st.session_state.success_msg = "Cancelled. No changes made."
                         st.rerun()
-        else:
-            st.warning("No friends found 🥹")
             
     if "success_msg" in st.session_state and st.session_state.success_msg != "":
         st.success(st.session_state.success_msg)

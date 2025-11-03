@@ -5,6 +5,7 @@ import calendar as cal
 import pandas as pd
 from PIL import Image
 from filelock import FileLock
+import random
 import threading
 from app.user import User
 from app.chat import Chat
@@ -195,6 +196,13 @@ class Manager:
 
         self.save_data()
         return True
+    
+    def recommend_friends(self, user_id):
+        current_user = self.return_user(user_id)
+        except_current = [user for user in self.users if user.user_id == user_id and user_id not in current_user.friends]
+        recommendations = random.sample(except_current, min(3, len(except_current)))
+        return recommendations
+
 
     # ------------------- Post Methods ------------------- #
     def add_post(self, user_id, post_file):

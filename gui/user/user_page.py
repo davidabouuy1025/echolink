@@ -16,7 +16,7 @@ def user_page():
     # current_user.status = "online"
     # print(f'Set user @{user_id} to ONLINE')
     # current_user.last_active = datetime.datetime.now().strftime("%d/%m/%Y")
-    manager.save()
+    # manager.save()
 
     if not current_user:
         st.warning("User data not loaded yet, Please refresh  or log in again")

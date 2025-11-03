@@ -34,8 +34,8 @@ def dashboard():
             friend_request = len(current_user.friend_request)
             st.metric("Friend Requests", friend_request)
 
-            msg_count = len(current_user.chat_ids)
-            st.metric("Total Message Sent", msg_count)
+            msg_count = [msg for msg in manager.chat if msg.sender == user_id]
+            st.metric("Total Message Sent", len(msg_count))
         with disp3:
             if current_user.profile_pic:
                 st.image(current_user.profile_pic, width='content', caption="Your Profile Picture")

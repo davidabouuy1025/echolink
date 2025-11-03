@@ -27,7 +27,7 @@ def login():
             else:
                 current_user = next((u for u in manager.users if u.username == username and u.password == password), None)
                 current_user.status = "online"
-                manager.save()
+                # manager.save()
                 st.session_state.page = "user"
                 st.session_state.user_id = current_user.user_id
                 st.rerun()

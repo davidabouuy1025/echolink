@@ -5,6 +5,7 @@ import calendar as cal
 import pandas as pd
 from PIL import Image
 from filelock import FileLock
+import threading
 from app.user import User
 from app.chat import Chat
 from app.post import Post
@@ -39,10 +40,12 @@ class Manager:
     def _load_json(self, path, key, cls, next_id_key=None):
         data_list = []
         next_id = 1
+        chat_thread_lock = threading.Lock()
         try:
-            with FileLock(path + ".lock"):
-                with open(path, "r") as f:
-                    data = json.load(f)
+            with chat_thread_lock:
+                with FileLock(path + ".lock"):
+                    with open(path, "r") as f:
+                        data = json.load(f)
         except:
             data = {}
 
@@ -83,14 +86,18 @@ class Manager:
         self._save_json(self.mood_path, "moods", self.moods)
 
     def _save_json(self, path, key, obj_list, next_id_key=None, next_id_value=None):
+        chat_thread_lock = threading.Lock()
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        
         data_to_save = {key: [o.__dict__ for o in obj_list]}
         if next_id_key and next_id_value is not None:
             data_to_save[next_id_key] = next_id_value
 
-        with FileLock(path + ".lock"):
-            with open(path, "w") as f:
-                json.dump(data_to_save, f, indent=4)
+        with chat_thread_lock:
+            with FileLock(path + ".lock"):
+                with open(path, "w") as f:
+                    json.dump(data_to_save, f, indent=4)
+                    print(f"Save {path}")
 
     def save(self):
         self.save_data()
@@ -139,26 +146,25 @@ class Manager:
 
     # ------------------- Chat Methods ------------------- #
     def add_chat(self, sender, receiver, content):
-        if not content:
-            return "Please type something"
-        chat_id = self.next_chat_id
-        new_chat = Chat(chat_id, sender, receiver, content)
-        self.chat.append(new_chat)
-
-        sender_user = next((u for u in self.users if u.user_id == sender), None)
-        receiver_user = next((u for u in self.users if u.user_id == receiver), None)
-        if sender_user and receiver_user:
-            sender_user.chat_ids.append(chat_id)
-            receiver_user.chat_ids.append(chat_id)
+        chat_thread_lock = threading.Lock()
+        with chat_thread_lock:
+            chat_id = self.next_chat_id
+            new_chat = Chat(chat_id, sender, receiver, content)
+            self.chat.append(new_chat)
             self.next_chat_id += 1
             self.save_data()
             return "sent"
-        return "Unexpected error"
+
 
     def get_chat_history(self, user_id, friend_id):
-        return [c for c in self.chat if (c.sender == user_id and c.receiver == friend_id) or
-                                         (c.sender == friend_id and c.receiver == user_id)]
-
+        chat_thread_lock = threading.Lock()
+        
+        with chat_thread_lock:
+            self.load_data()
+            return [c for c in self.chat if
+                    (str(c.sender) == str(user_id) and str(c.receiver) == str(friend_id)) or
+                    (str(c.sender) == str(friend_id) and str(c.receiver) == str(user_id))]
+    
     # ------------------- Friend Methods ------------------- #
     def add_friend(self, current_user, friend_uname):
         friend = next((f for f in self.users if f.username == friend_uname), None)
@@ -264,3 +270,6 @@ class Manager:
         if user:
             user.remark = remark
             self.save_data()
+
+    def return_user(self, user_id):
+        return next((u for u in self.users if u.user_id == user_id), None)

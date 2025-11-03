@@ -1,3 +1,4 @@
+import datetime
 import streamlit as st
 import os
 from streamlit_autorefresh import st_autorefresh
@@ -15,12 +16,11 @@ def chat():
     #         st.session_state.chat_file_mtime = last_modified
     #         st_autorefresh(interval=100, key="chat_refresh_once")
 
-    st_autorefresh(interval=1000)
-
-    chat_file = "data/chat.json"
-    last_modified = os.path.getmtime(chat_file)
+    # chat_file = "data/chat.json"
+    # last_modified = os.path.getmtime(chat_file)
     # print(last_modified)
 
+    st_autorefresh(interval=1500)
 
     if "chat_friend" not in st.session_state:
         st.session_state.chat_friend = ""
@@ -62,37 +62,61 @@ def chat():
     selected_friend = st.selectbox("Select Your Friend", friend_disp.keys())
     friend_id = friend_disp[selected_friend]
     st.session_state.chat_friend = friend_id
+    chat_friend = manager.return_user(friend_id)
 
     # --- Friend Profile ---
     with st.container(border=True):
         if st.session_state.chat_friend != "":
-            chat_friend = next((u for u in manager.users if u.user_id == st.session_state.chat_friend), None)
+            mood_emojis = {
+                "happy": "Happy 😊",
+                "sad": "Sad 😢",
+                "angry": "Angry 😡",
+                "neutral": "Neutral 😐",
+                "excited": "Excited 🤩",
+                "tired": "Tired 😴",
+                "no": "❌"
+            }
+                
+            chat_friend_mood = next((m for m in manager.moods if m.user_id == st.session_state.chat_friend), None)
+            if chat_friend_mood:
+                today_mood_entry = next((m["mood"] for m in chat_friend_mood.moods if m["date"] == datetime.datetime.now().strftime("%Y-%m-%d")), "no")
+            else:
+                today_mood_entry = "no"
+            # st.info(today_mood_entry)
+            friend_mood = mood_emojis[today_mood_entry]
 
             if chat_friend:
-                st.write(f"@{chat_friend.username}")
+                st.subheader(f"@{chat_friend.username}")
+                st.write("")
                 if chat_friend.gender == "Male":
                     pronoun = "His"
                 elif chat_friend.gender == "Female":
                     pronoun = "Her"
                 else:
                     pronoun = "Them"
-                st.write(f"{pronoun}: {chat_friend.remark}")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Mood", friend_mood)
+                with col2:
+                    st.metric("Remark", chat_friend.remark)
 
-    # --- Initialize chat counter if not exist ---
-    chat_key = f"chat_count_{friend_id}"
-    if chat_key not in st.session_state:
-        st.session_state[chat_key] = len(manager.get_chat_history(user_id, friend_id))
+    # # --- Initialize chat counter if not exist ---
+    # chat_key = f"chat_count_{friend_id}"
+    # if chat_key not in st.session_state:
+    #     st.session_state[chat_key] = len(manager.get_chat_history(user_id, friend_id))
 
     # --- Smart rerun if new message count detected ---
-    current_count = len(manager.get_chat_history(user_id, friend_id))
-    if current_count != st.session_state[chat_key]:
-        st.session_state[chat_key] = current_count
-        st.rerun()
-
-    # --- Load previous chat ---
-    chat_history = manager.get_chat_history(current_user.user_id, friend_id)
+    # current_count = len(manager.get_chat_history(user_id, friend_id))
+    # if current_count != st.session_state[chat_key]:
+    #     st.session_state[chat_key] = current_count
+    #     st.rerun()
 
     with st.form("chat-preview"):
+        # --- Load previous chat ---
+        manager.load_data()
+        chat_history = manager.get_chat_history(current_user.user_id, friend_id)
+        st.info(chat_history[-1].content)
+
         # No chats found
         if not chat_history:
             st.markdown("<span style='text-align:center'>Start your chat with your friends! 🤗</span>", unsafe_allow_html=True)

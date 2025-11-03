@@ -55,7 +55,7 @@ class User:
         else:
             check_user = all_users[username]
             if password != check_user:
-                return False, "Username and password doesn't match"
+                return False, "Username and password don't match"
             else:
                 return True, "Successfully logged in"
         

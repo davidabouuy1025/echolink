@@ -5,218 +5,155 @@ import datetime
 import calendar as cal
 import pandas as pd
 from PIL import Image
-import mysql.connector
-from mysql.connector import Error
-from mysql.connector import pooling
-import streamlit as st
-from typing import Optional, List, Tuple
-
-# import your domain classes (must be on pythonpath)
-from app.user import User, UserManager
+from filelock import FileLock
+import threading
+from app.user import User
 from app.chat import Chat
-from app.post import Post, PostManager
-from app.mood import Mood, MoodManager\
+from app.post import Post
+from app.mood import Mood
 
-# Configure this to your environment / Streamlit secrets.
-# You can pass a dict to Manager(...) or set these env vars.
-DEFAULT_DB_CONFIG = {
-    "host": st.secrets["mysql"]["host"],
-    "port": int(st.secrets["mysql"]["port"]),
-    "user": st.secrets["mysql"]["user"],
-    "password": st.secrets["mysql"]["password"],
-    "database": st.secrets["mysql"]["database"],
-    "autocommit": False,
-}
+class Manager:
+    def __init__(self, user_path="data/user.json", chat_path="data/chat.json",
+                 post_path="data/post.json", mood_path="data/mood.json"):
+        self.users = []
+        self.chat = []
+        self.posts = []
+        self.moods = []
 
+        self.users_path = user_path
+        self.chat_path = chat_path
+        self.post_path = post_path
+        self.mood_path = mood_path
 
-class ManagerSQL:
-    """
-    MySQL-backed Manager to replace the JSON-based Manager.
-    Uses mysql.connector with connection pooling and transactions.
-    Public method names and return types match your previous Manager.
-    """
+        self.next_user_id = 1
+        self.next_chat_id = 1
+        self.next_post_id = 1
 
-    def __init__(self, db_config: dict = None, pool_name: str = "echolink_pool", pool_size: int = 5):
-        self.db_config = db_config or DEFAULT_DB_CONFIG
-        # create database if not exists (best-effort)
-        self._ensure_database()
-        # init connection pool
-        self.pool = pooling.MySQLConnectionPool(pool_name=pool_name, pool_size=pool_size, **self.db_config)
-        # cache some in-memory lists for quick reads (optional)
-        # but we will read/write from DB for each operation to avoid stale overwrites
-        # id counters are derived from DB auto-increment
-        self.init_db()  # creates tables if they don't exist
+        self.load_data()
 
-    # -------- DB helpers --------
-    def _get_conn(self):
-        return self.pool.get_connection()
+    # ------------------- Load Data ------------------- #
+    def load_data(self):
+        self.users, self.next_user_id = self._load_json(self.users_path, "users", User, "next_user_id")
+        self.chat, self.next_chat_id = self._load_json(self.chat_path, "chats", Chat, "next_chat_id")
+        self.posts, self.next_post_id = self._load_json(self.post_path, "posts", Post, "next_post_id")
+        self.moods, _ = self._load_json(self.mood_path, "moods", Mood)
 
-    def _ensure_database(self):
-        # Ensure database exists (connect without database)
-        cfg = dict(self.db_config)
-        db = cfg.pop("database", None)
+    def _load_json(self, path, key, cls, next_id_key=None):
+        data_list = []
+        next_id = 1
+        chat_thread_lock = threading.Lock()
         try:
-            cnx = mysql.connector.connect(**cfg)
-            cursor = cnx.cursor()
-            cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
-            cnx.commit()
-            cursor.close()
-            cnx.close()
-        except Exception:
-            # If cannot create DB, assume it exists or user will create manually
-            pass
+            with chat_thread_lock:
+                with FileLock(path + ".lock"):
+                    with open(path, "r") as f:
+                        data = json.load(f)
+        except:
+            data = {}
 
-    # -------- Schema / Initialization --------
-    def init_db(self):
-        """Create tables if they don't exist. Uses transactions to be safe."""
-        create_table_sql = [
-            # users
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INT PRIMARY KEY AUTO_INCREMENT,
-                username VARCHAR(255) UNIQUE NOT NULL,
-                password VARCHAR(255) NOT NULL,
-                name VARCHAR(255) DEFAULT '',
-                gender VARCHAR(50) DEFAULT '',
-                bday VARCHAR(50) DEFAULT '',
-                contact_num VARCHAR(100) DEFAULT '',
-                profile_pic TEXT,
-                status VARCHAR(50) DEFAULT 'offline',
-                last_active VARCHAR(100) DEFAULT '',
-                remark TEXT
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """,
-            # chats
-            """
-            CREATE TABLE IF NOT EXISTS chats (
-                chat_id INT PRIMARY KEY AUTO_INCREMENT,
-                sender INT NOT NULL,
-                receiver INT NOT NULL,
-                content TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (sender) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (receiver) REFERENCES users(user_id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """,
-            # friend_requests
-            """
-            CREATE TABLE IF NOT EXISTS friend_requests (
-                req_id INT PRIMARY KEY AUTO_INCREMENT,
-                sender_id INT NOT NULL,
-                receiver_id INT NOT NULL,
-                req_date VARCHAR(50),
-                UNIQUE KEY uq_req (sender_id, receiver_id),
-                FOREIGN KEY (sender_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (receiver_id) REFERENCES users(user_id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """,
-            # friends (mutual)
-            """
-            CREATE TABLE IF NOT EXISTS friends (
-                id INT PRIMARY KEY AUTO_INCREMENT,
-                user_id INT NOT NULL,
-                friend_id INT NOT NULL,
-                since_date VARCHAR(50),
-                UNIQUE KEY uq_friend (user_id, friend_id),
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-                FOREIGN KEY (friend_id) REFERENCES users(user_id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """,
-            # posts
-            """
-            CREATE TABLE IF NOT EXISTS posts (
-                post_id INT PRIMARY KEY AUTO_INCREMENT,
-                user_id INT NOT NULL,
-                image_path TEXT,
-                dt VARCHAR(50),
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """,
-            # moods
-            """
-            CREATE TABLE IF NOT EXISTS moods (
-                id INT PRIMARY KEY AUTO_INCREMENT,
-                user_id INT NOT NULL,
-                mood_date VARCHAR(50) NOT NULL,
-                mood_value VARCHAR(100),
-                UNIQUE KEY uq_mood (user_id, mood_date),
-                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-            """
-        ]
+        if key in data:
+            if cls == User:
+                data_list = [
+                    User(u["user_id"], u["username"], u["password"], u["name"], u["gender"], u["bday"],
+                         u["contact_num"], u["profile_pic"], u["status"], u["last_active"], u["remark"],
+                         u["chat_ids"], u["friends"], u["friend_request"])
+                    for u in data[key]
+                ]
+            elif cls == Chat:
+                data_list = [
+                    Chat(c["chat_id"], c["sender"], c["receiver"], c["content"])
+                    for c in data[key]
+                ]
+            elif cls == Post:
+                data_list = [
+                    Post(p["chat_id"], p["user_id"], p["image_path"], p["datetime"])
+                    for p in data[key]
+                ]
+            elif cls == Mood:
+                data_list = [
+                    Mood(m["user_id"], m["moods"])
+                    for m in data[key]
+                ]
 
-        conn = self._get_conn()
-        try:
-            cursor = conn.cursor()
-            for sql in create_table_sql:
-                cursor.execute(sql)
-            conn.commit()
-        finally:
-            cursor.close()
-            conn.close()
+        if next_id_key:
+            next_id = data.get(next_id_key, 1)
 
+        return data_list, next_id
 
-    # -------- User methods (match previous interface) --------
-    def add_user(self, username: str, password: str) -> Tuple[Optional[int], Optional[str]]:
-        """
-        Return (user_id, message) on success, (None, error) on validation error.
-        """
-        # Validate using your User static validators (they internally used Manager with JSON; we skip that)
-        # But to keep behavior consistent, call the same validations if present:
+    # ------------------- Save Data ------------------- #
+    def save_data(self):
+        self._save_json(self.users_path, "users", self.users, "next_user_id", self.next_user_id)
+        self._save_json(self.chat_path, "chats", self.chat, "next_chat_id", self.next_chat_id)
+        self._save_json(self.post_path, "posts", self.posts, "next_post_id", self.next_post_id)
+        self._save_json(self.mood_path, "moods", self.moods)
+
+    def _save_json(self, path, key, obj_list, next_id_key=None, next_id_value=None):
+        chat_thread_lock = threading.Lock()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         
-        # err1 = UserManager.validate_username(username)
-        # if err1:
-        #     return None, err1
-        # err2 = UserManager.validate_password(password)
-        # if err2:
-        #     return None, err2
+        data_to_save = {key: [o.__dict__ for o in obj_list]}
+        if next_id_key and next_id_value is not None:
+            data_to_save[next_id_key] = next_id_value
 
-        conn = self._get_conn()
-        try:
-            cursor = conn.cursor()
-            insert = "INSERT INTO users (username, password, status, last_active) VALUES (%s, %s, %s, %s)"
-            now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-            cursor.execute(insert, (username, password, "online", now))
-            conn.commit()
-            user_id = cursor.lastrowid
-            return user_id, "[System] Successfully created user"
-        except mysql.connector.IntegrityError as e:
-            # duplicate username
-            return None, ["Username exists"]
-        finally:
-            cursor.close()
-            conn.close()
+        with chat_thread_lock:
+            with FileLock(path + ".lock"):
+                with open(path, "w") as f:
+                    json.dump(data_to_save, f, indent=4)
+                    print(f"Save {path}")
 
-    def update_profile(self, user_id: int, new_password: str, new_name: str, new_bday: str, new_gender: str, new_contact_num: str, upload_file=None) -> str:
-        """
-        Update user's profile; returns "Profile updated successfully" or error string.
-        """
-        conn = self._get_conn()
-        cursor = conn.cursor()
-        try:
-            # handle profile pic saving if provided (same behavior as JSON manager)
-            if upload_file:
-                profile_dir = "profile_pics"
-                os.makedirs(profile_dir, exist_ok=True)
-                file_ext = os.path.splitext(upload_file.name)[1] or ".png"
-                save_path = os.path.join(profile_dir, f"{user_id}{file_ext}")
-                counter = 1
-                while os.path.exists(save_path):
-                    save_path = os.path.join(profile_dir, f"{user_id}_{counter}{file_ext}")
-                    counter += 1
-                Image.open(upload_file).save(save_path)
-                profile_pic = save_path
-                cursor.execute("UPDATE users SET profile_pic=%s WHERE user_id=%s", (profile_pic, user_id))
+    def save(self):
+        self.save_data()
 
-            cursor.execute("""
-                UPDATE users SET password=%s, name=%s, bday=%s, gender=%s, contact_num=%s WHERE user_id=%s
-            """, (new_password, new_name, new_bday, new_gender, new_contact_num, user_id))
-            conn.commit()
-            return "Profile updated successfully"
-        finally:
-            cursor.close()
-            conn.close()
+    # ------------------- User Methods ------------------- #
+    def add_user(self, username, password):
+        user_id = self.next_user_id
+        if User.username_validation(username):
+            return None, User.username_validation(username)
+        if User.password_validation(password):
+            return None, User.password_validation(password)
 
+        current_dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        new_user = User.create_user_object(user_id, username, password, current_dt, [], [], [])
+        self.users.append(new_user)
+        self.next_user_id += 1
+        self.save_data()
+        return user_id, "[System] Successfully created user"
+
+    def update_profile(self, user_id, new_password, new_name, new_bday, new_gender, new_contact_num, upload_file=None):
+        user = next((u for u in self.users if u.user_id == user_id), None)
+        if not user:
+            return "User not found"
+
+        # Profile pic
+        if upload_file:
+            profile_dir = "profile_pics"
+            os.makedirs(profile_dir, exist_ok=True)
+            file_ext = os.path.splitext(upload_file.name)[1] or ".png"
+            save_path = os.path.join(profile_dir, f"{user_id}{file_ext}")
+            counter = 1
+            while os.path.exists(save_path):
+                save_path = os.path.join(profile_dir, f"{user_id}_{counter}{file_ext}")
+                counter += 1
+            Image.open(upload_file).save(save_path)
+            user.profile_pic = save_path
+
+        user.password = new_password
+        user.name = new_name
+        user.bday = new_bday
+        user.gender = new_gender
+        user.contact_num = new_contact_num
+
+        self.save_data()
+        return "Profile updated successfully"
+
+    # ------------------- Chat Methods ------------------- #
+    def add_chat(self, sender, receiver, content):
+        chat_thread_lock = threading.Lock()
+        with chat_thread_lock:
+            chat_id = self.next_chat_id
+            new_chat = Chat(chat_id, sender, receiver, content)
+            self.chat.append(new_chat)
+            self.next_chat_id += 1
+            self.save_data()
     # -------- Chat methods --------
     def add_chat(self, sender: int, receiver: int, content: str) -> str:
         if not content:
@@ -231,10 +168,29 @@ class ManagerSQL:
             # maintain chat_ids in users? Previously you appended chat_ids to User.__dict__
             # To keep compatibility, we won't store chat_ids column; instead, frontend can query chats table.
             return "sent"
+
         finally:
             cursor.close()
             conn.close()
 
+    def get_chat_history(self, user_id, friend_id):
+        chat_thread_lock = threading.Lock()
+        
+        with chat_thread_lock:
+            self.load_data()
+            return [c for c in self.chat if
+                    (str(c.sender) == str(user_id) and str(c.receiver) == str(friend_id)) or
+                    (str(c.sender) == str(friend_id) and str(c.receiver) == str(user_id))]
+    
+    # ------------------- Friend Methods ------------------- #
+    def add_friend(self, current_user, friend_uname):
+        friend = next((f for f in self.users if f.username == friend_uname), None)
+        if not friend:
+            return False
+        current_dt = datetime.datetime.now().strftime("%d/%m/%Y")
+        friend.friend_request.append([current_dt, current_user.user_id])
+        self.save_data()
+        return True
     def get_chat_history(self, user_id: int, friend_id: int) -> List[Chat]:
         conn = self._get_conn()
         cursor = conn.cursor(dictionary=True)
@@ -448,6 +404,15 @@ class ManagerSQL:
         df["mood"] = df["mood"].map(mood_emojis1).fillna("❓")
         return df
 
+    # ------------------- Remark ------------------- #
+    def add_remark(self, user_id, remark):
+        user = next((u for u in self.users if u.user_id == user_id), None)
+        if user:
+            user.remark = remark
+            self.save_data()
+
+    def return_user(self, user_id):
+        return next((u for u in self.users if u.user_id == user_id), None)
     # -------- Remark --------
     def add_remark(self, user_id: int, remark: str):
         conn = self._get_conn()

@@ -1,12 +1,11 @@
 import streamlit as st
-from manager.manager import ManagerSQL  # <-- Use the MySQL version
+from manager.manager import Manager
 
 st.set_page_config(layout='wide', page_title='EchoLink')
 
 def login_page():
-    # Initialize manager and session state
     if "manager" not in st.session_state:
-        st.session_state.manager = ManagerSQL()  # MySQL-backed manager
+        st.session_state.manager = Manager()
 
     if "page" not in st.session_state:
         st.session_state.page = "login"
@@ -19,7 +18,6 @@ def login_page():
 
     manager = st.session_state.manager
 
-    # --- Page routing ---
     if st.session_state.page == "login":
         st.title("EchoLink 🔎🔊")
         st.sidebar.title("EchoLink Navigation")
@@ -31,6 +29,7 @@ def login_page():
         elif menu == "Register":
             from gui.login.register import register
             register()
+
         elif menu == "README":
             from gui.login.readme import readme
             readme()
